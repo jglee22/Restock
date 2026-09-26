@@ -4084,6 +4084,57 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!1 &1410325858
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1410325860}
+  - component: {fileID: 1410325859}
+  m_Layer: 0
+  m_Name: StoreInventory
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1410325859
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1410325858}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3df29f03c9f9c5944ab81ec81081fd2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StoreInventory
+  entries:
+  - product: {fileID: 11400000, guid: db55b5ef9777eea4c8c76ce843f3d525, type: 2}
+    quantity: 10
+  - product: {fileID: 11400000, guid: 3750e8aa78aa21b4696f1320e9a1c0da, type: 2}
+    quantity: 10
+  - product: {fileID: 11400000, guid: 5047d8e10ca38ef438dea9d1c61895ec, type: 2}
+    quantity: 8
+--- !u!4 &1410325860
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1410325858}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1410531668
 GameObject:
   m_ObjectHideFlags: 0
@@ -4981,3 +5032,4 @@ SceneRoots:
   - {fileID: 832575519}
   - {fileID: 876268977}
   - {fileID: 2053448248}
+  - {fileID: 1410325860}
