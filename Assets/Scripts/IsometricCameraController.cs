@@ -83,7 +83,8 @@ public class IsometricCameraController : MonoBehaviour
         }
 
         Vector3 nextPosition = transform.position;
-        nextPosition += (right * input.x + forward * input.y) * (moveSpeed * Time.deltaTime);
+        // 영업 배속과 Pause는 시뮬레이션 시계만 바꾸고, 카메라 이동 속도는 유지한다.
+        nextPosition += (right * input.x + forward * input.y) * (moveSpeed * Time.unscaledDeltaTime);
         nextPosition.x = Mathf.Clamp(nextPosition.x, Mathf.Min(minWorldX, maxWorldX), Mathf.Max(minWorldX, maxWorldX));
         nextPosition.z = Mathf.Clamp(nextPosition.z, Mathf.Min(minWorldZ, maxWorldZ), Mathf.Max(minWorldZ, maxWorldZ));
         transform.position = nextPosition;
