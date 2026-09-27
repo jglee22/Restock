@@ -1,32 +1,52 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-// 고객 한 명이 매장 안쪽까지 갔다가 잠시 머물고 출구로 나간다.
-// 상품, 진열대, 계산은 다루지 않는다.
+// 고객 한 명이 입장한 뒤, 진열된 상품 하나를 집어 나간다.
+// 창고 재고는 건드리지 않고 Shelf.TryTakeOne만 호출한다.
 public class CustomerMover : MonoBehaviour
 {
     const float StuckTimeout = 2f;
+    const float DestinationSampleRadius = 1f;
+
+    enum CustomerState
+    {
+        Entering,
+        SelectingProduct,
+        MovingToShelf,
+        Browsing,
+        Leaving
+    }
 
     NavMeshAgent agent;
     CustomerSpawner spawner;
     Transform insidePoint;
     Transform exitPoint;
-    float stayDuration;
+    Shelf[] shoppingShelves;
+    float browseDuration;
+    CustomerState state;
     bool visitCompleted;
+    bool moveFailed;
     bool hasWarned;
 
-    public void Begin(CustomerSpawner owner, Transform inside, Transform exit, float stay)
+    public void Begin(
+        CustomerSpawner owner,
+        Transform inside,
+        Transform exit,
+        Shelf[] shelves,
+        float browse)
     {
         spawner = owner;
         insidePoint = inside;
         exitPoint = exit;
-        stayDuration = stay;
+        shoppingShelves = shelves;
+        browseDuration = browse;
         agent = GetComponent<NavMeshAgent>();
         StartCoroutine(Visit());
     }
 
     System.Collections.IEnumerator Visit()
     {
+        state = CustomerState.Entering;
         if (agent == null)
         {
             WarnOnce("CustomerMover: NavMeshAgent가 없습니다.");
@@ -48,26 +68,138 @@ public class CustomerMover : MonoBehaviour
         }
 
         yield return WaitUntilArrived(insidePoint);
-        if (!visitCompleted && hasWarned)
+        if (moveFailed)
         {
             FinishVisit();
             yield break;
         }
 
-        yield return new WaitForSeconds(stayDuration);
+        Shelf excludedShelf = null;
+        Shelf chosenShelf = null;
+        bool retried = false;
+        state = CustomerState.SelectingProduct;
 
-        if (!TrySetDestination(exitPoint))
+        while (state != CustomerState.Leaving && !visitCompleted)
         {
-            FinishVisit();
-            yield break;
+            if (state == CustomerState.SelectingProduct)
+            {
+                chosenShelf = ChooseShelf(excludedShelf);
+                state = chosenShelf == null
+                    ? CustomerState.Leaving
+                    : CustomerState.MovingToShelf;
+                continue;
+            }
+
+            if (state == CustomerState.MovingToShelf)
+            {
+                if (!TrySetDestination(chosenShelf.CustomerStandPoint))
+                {
+                    state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
+                    continue;
+                }
+
+                yield return WaitUntilArrived(chosenShelf.CustomerStandPoint);
+                if (moveFailed)
+                {
+                    state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
+                    continue;
+                }
+
+                state = CustomerState.Browsing;
+                continue;
+            }
+
+            if (state == CustomerState.Browsing)
+            {
+                yield return new WaitForSeconds(browseDuration);
+                if (chosenShelf.TryTakeOne())
+                {
+                    state = CustomerState.Leaving;
+                    continue;
+                }
+
+                state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
+            }
         }
 
-        yield return WaitUntilArrived(exitPoint);
+        state = CustomerState.Leaving;
+        if (TrySetDestination(exitPoint))
+        {
+            yield return WaitUntilArrived(exitPoint);
+        }
+
         FinishVisit();
+    }
+
+    CustomerState BeginAnotherShelfAttempt(ref bool retried, ref Shelf excludedShelf, Shelf failedShelf)
+    {
+        if (retried)
+        {
+            return CustomerState.Leaving;
+        }
+
+        retried = true;
+        excludedShelf = failedShelf;
+        return CustomerState.SelectingProduct;
+    }
+
+    Shelf ChooseShelf(Shelf excludedShelf)
+    {
+        if (shoppingShelves == null)
+        {
+            WarnOnce("CustomerMover: 쇼핑 Shelf 목록이 없습니다.");
+            return null;
+        }
+
+        int candidateCount = 0;
+        for (int index = 0; index < shoppingShelves.Length; index++)
+        {
+            if (CanShop(shoppingShelves[index], excludedShelf))
+            {
+                candidateCount += 1;
+            }
+        }
+
+        if (candidateCount == 0)
+        {
+            return null;
+        }
+
+        int pick = Random.Range(0, candidateCount);
+        int seen = 0;
+        for (int index = 0; index < shoppingShelves.Length; index++)
+        {
+            Shelf shelf = shoppingShelves[index];
+            if (!CanShop(shelf, excludedShelf))
+            {
+                continue;
+            }
+
+            if (seen == pick)
+            {
+                return shelf;
+            }
+
+            seen += 1;
+        }
+
+        return null;
+    }
+
+    static bool CanShop(Shelf shelf, Shelf excludedShelf)
+    {
+        return shelf != null
+            && shelf != excludedShelf
+            && shelf.AssignedProduct != null
+            && shelf.CurrentQuantity > 0
+            && !shelf.IsEmpty
+            && shelf.CustomerStandPoint != null;
     }
 
     bool TrySetDestination(Transform destination)
     {
+        moveFailed = false;
+
         if (destination == null)
         {
             WarnOnce("CustomerMover: 이동 지점이 연결되지 않았습니다.");
@@ -80,7 +212,13 @@ public class CustomerMover : MonoBehaviour
             return false;
         }
 
-        if (agent.SetDestination(destination.position))
+        if (!NavMesh.SamplePosition(destination.position, out NavMeshHit hit, DestinationSampleRadius, NavMesh.AllAreas))
+        {
+            WarnOnce($"CustomerMover: {destination.name} 근처에서 NavMesh를 찾지 못했습니다.");
+            return false;
+        }
+
+        if (agent.SetDestination(hit.position))
         {
             return true;
         }
@@ -92,6 +230,7 @@ public class CustomerMover : MonoBehaviour
     System.Collections.IEnumerator WaitUntilArrived(Transform destination)
     {
         float stuckTime = 0f;
+        string destinationName = destination != null ? destination.name : "목적지";
 
         while (!visitCompleted)
         {
@@ -103,11 +242,12 @@ public class CustomerMover : MonoBehaviour
 
             if (agent.pathStatus == NavMeshPathStatus.PathInvalid)
             {
-                WarnOnce($"CustomerMover: 경로를 찾지 못했습니다. {destination.name}");
+                moveFailed = true;
+                WarnOnce($"CustomerMover: 경로를 찾지 못했습니다. {destinationName}");
                 yield break;
             }
 
-            if (!agent.pathPending && agent.hasPath && agent.remainingDistance <= agent.stoppingDistance)
+            if (agent.hasPath && agent.remainingDistance <= agent.stoppingDistance)
             {
                 yield break;
             }
@@ -123,7 +263,8 @@ public class CustomerMover : MonoBehaviour
 
             if (stuckTime >= StuckTimeout)
             {
-                WarnOnce($"CustomerMover: 목적지에 도착하지 못했습니다. {destination.name}");
+                moveFailed = true;
+                WarnOnce($"CustomerMover: 목적지에 도착하지 못했습니다. {destinationName}");
                 yield break;
             }
 
