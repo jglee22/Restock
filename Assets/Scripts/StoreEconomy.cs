@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// 편의점 하나의 보유 자금과 당일 매출을 관리한다.
+// 편의점 하나의 보유 자금, 당일 매출, 당일 매입 비용을 관리한다.
 // 재고와 줄, 시간은 바꾸지 않는다.
 public class StoreEconomy : MonoBehaviour
 {
@@ -9,14 +9,18 @@ public class StoreEconomy : MonoBehaviour
 
     int currentMoney;
     int dailyRevenue;
+    int dailyExpense;
 
     public int CurrentMoney => currentMoney;
     public int DailyRevenue => dailyRevenue;
+    public int DailyExpense => dailyExpense;
+    public int NetProfit => dailyRevenue - dailyExpense;
 
     void Awake()
     {
         currentMoney = startingMoney;
         dailyRevenue = 0;
+        dailyExpense = 0;
     }
 
     void OnEnable()
@@ -60,9 +64,28 @@ public class StoreEconomy : MonoBehaviour
         dailyRevenue += salePrice;
     }
 
+    public bool TrySpend(int amount)
+    {
+        if (amount <= 0)
+        {
+            Debug.LogWarning($"StoreEconomy: 지출 금액은 1 이상이어야 합니다. 요청 금액: {amount}", this);
+            return false;
+        }
+
+        if (currentMoney < amount)
+        {
+            return false;
+        }
+
+        currentMoney -= amount;
+        dailyExpense += amount;
+        return true;
+    }
+
     void HandleDayStarted(int day)
     {
         dailyRevenue = 0;
+        dailyExpense = 0;
     }
 
     void OnValidate()
