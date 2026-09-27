@@ -7,6 +7,7 @@ using UnityEngine.UI;
 public class StoreHud : MonoBehaviour
 {
     [SerializeField] StoreSession session;
+    [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
     [SerializeField] TMP_Text phaseText;
@@ -26,6 +27,7 @@ public class StoreHud : MonoBehaviour
 
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
+    bool hasWarned;
 
     void Awake()
     {
@@ -93,14 +95,36 @@ public class StoreHud : MonoBehaviour
 
         if (!forceVisibility && session.Phase == displayedPhase)
         {
+            if (session.Phase == StorePhase.Closing)
+            {
+                SetButtonInteractable(showResultButton, CanShowResult());
+            }
+
             return;
         }
 
         displayedPhase = session.Phase;
         SetButtonVisible(startBusinessButton, session.Phase == StorePhase.Preparation);
         SetButtonVisible(showResultButton, session.Phase == StorePhase.Closing);
+        SetButtonInteractable(showResultButton, CanShowResult());
         SetObjectVisible(speedControls, session.Phase == StorePhase.Open);
         SetObjectVisible(resultPanel, session.Phase == StorePhase.Result);
+    }
+
+    bool CanShowResult()
+    {
+        if (session == null || session.Phase != StorePhase.Closing)
+        {
+            return false;
+        }
+
+        if (customerSpawner == null)
+        {
+            WarnOnce("StoreHud: CustomerSpawner가 연결되지 않아 결산 보기를 열 수 없습니다.");
+            return false;
+        }
+
+        return customerSpawner.ActiveCustomerCount <= 0;
     }
 
     void OnStartBusiness()
@@ -111,6 +135,11 @@ public class StoreHud : MonoBehaviour
 
     void OnShowResult()
     {
+        if (!CanShowResult())
+        {
+            return;
+        }
+
         session.ShowResult();
         Refresh(forceVisibility: true);
     }
@@ -171,11 +200,38 @@ public class StoreHud : MonoBehaviour
         }
     }
 
+    void OnValidate()
+    {
+        if (customerSpawner == null)
+        {
+            Debug.LogWarning("StoreHud: CustomerSpawner가 연결되지 않았습니다.", this);
+        }
+    }
+
+    void WarnOnce(string message)
+    {
+        if (hasWarned)
+        {
+            return;
+        }
+
+        hasWarned = true;
+        Debug.LogWarning(message, this);
+    }
+
     static void SetButtonVisible(Button button, bool visible)
     {
         if (button != null)
         {
             button.gameObject.SetActive(visible);
+        }
+    }
+
+    static void SetButtonInteractable(Button button, bool interactable)
+    {
+        if (button != null && button.interactable != interactable)
+        {
+            button.interactable = interactable;
         }
     }
 
