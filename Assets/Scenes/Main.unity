@@ -2021,6 +2021,17 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 400000, guid: 60f260d8ad354831b6b56c846b45c575, type: 3}
   m_PrefabInstance: {fileID: 540001}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &540003 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1561929188235634180, guid: 60f260d8ad354831b6b56c846b45c575, type: 3}
+  m_PrefabInstance: {fileID: 540001}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea110325c0c764747bb346829240afcf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CheckoutCounter
 --- !u!1 &52959771
 GameObject:
   m_ObjectHideFlags: 0
@@ -4386,6 +4397,7 @@ MonoBehaviour:
   - {fileID: 634315563}
   - {fileID: 650340465}
   - {fileID: 400302501}
+  checkout: {fileID: 540003}
   spawnInterval: 4
   maxActiveCustomers: 5
   browseDuration: 1.2
