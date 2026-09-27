@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-// 고객 한 명이 입장한 뒤, 진열된 상품 하나를 집어 나간다.
-// 창고 재고는 건드리지 않고 Shelf.TryTakeOne만 호출한다.
+// 고객 한 명이 상품을 하나 집으면 계산대 줄을 거쳐 나간다.
+// 창고 재고는 건드리지 않고, 계산대에서 Shelf 수량을 다시 줄이지 않는다.
 public class CustomerMover : MonoBehaviour
 {
     const float StuckTimeout = 2f;
@@ -14,6 +14,9 @@ public class CustomerMover : MonoBehaviour
         SelectingProduct,
         MovingToShelf,
         Browsing,
+        MovingToCheckout,
+        WaitingCheckout,
+        CheckingOut,
         Leaving
     }
 
@@ -22,26 +25,81 @@ public class CustomerMover : MonoBehaviour
     Transform insidePoint;
     Transform exitPoint;
     Shelf[] shoppingShelves;
+    CheckoutCounter checkout;
     float browseDuration;
+    ProductDefinition heldProduct;
+    Transform checkoutQueueTarget;
+    bool checkoutTargetDirty;
+    bool arrivedAtCheckoutTarget;
+    bool isCheckoutFront;
+    bool checkoutFinished;
     CustomerState state;
     bool visitCompleted;
     bool moveFailed;
     bool hasWarned;
+
+    public ProductDefinition HeldProduct => heldProduct;
 
     public void Begin(
         CustomerSpawner owner,
         Transform inside,
         Transform exit,
         Shelf[] shelves,
-        float browse)
+        float browse,
+        CheckoutCounter checkoutCounter)
     {
         spawner = owner;
         insidePoint = inside;
         exitPoint = exit;
         shoppingShelves = shelves;
         browseDuration = browse;
+        checkout = checkoutCounter;
         agent = GetComponent<NavMeshAgent>();
         StartCoroutine(Visit());
+    }
+
+    public void SetCheckoutQueueTarget(Transform target, bool isFront)
+    {
+        if (state == CustomerState.CheckingOut || checkoutFinished)
+        {
+            return;
+        }
+
+        isCheckoutFront = isFront;
+        if (checkoutQueueTarget == target)
+        {
+            return;
+        }
+
+        checkoutQueueTarget = target;
+        checkoutTargetDirty = true;
+        arrivedAtCheckoutTarget = false;
+        if (agent != null)
+        {
+            agent.isStopped = false;
+        }
+    }
+
+    public void NotifyCheckoutStarted()
+    {
+        state = CustomerState.CheckingOut;
+        if (agent == null)
+        {
+            return;
+        }
+
+        agent.isStopped = true;
+        agent.ResetPath();
+    }
+
+    public void NotifyCheckoutCompleted()
+    {
+        checkoutFinished = true;
+        state = CustomerState.Leaving;
+        if (agent != null)
+        {
+            agent.isStopped = false;
+        }
     }
 
     System.Collections.IEnumerator Visit()
@@ -114,12 +172,76 @@ public class CustomerMover : MonoBehaviour
                 yield return new WaitForSeconds(browseDuration);
                 if (chosenShelf.TryTakeOne())
                 {
-                    state = CustomerState.Leaving;
+                    heldProduct = chosenShelf.AssignedProduct;
+                    state = BeginCheckout();
                     continue;
                 }
 
                 state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
             }
+
+            if (state == CustomerState.CheckingOut)
+            {
+                yield return null;
+                continue;
+            }
+
+            if (state == CustomerState.MovingToCheckout || state == CustomerState.WaitingCheckout)
+            {
+                if (checkoutTargetDirty)
+                {
+                    state = CustomerState.MovingToCheckout;
+                    arrivedAtCheckoutTarget = false;
+                    if (!TrySetDestination(checkoutQueueTarget))
+                    {
+                        state = CustomerState.Leaving;
+                        continue;
+                    }
+
+                    checkoutTargetDirty = false;
+                }
+
+                if (!arrivedAtCheckoutTarget)
+                {
+                    yield return WaitUntilArrived(checkoutQueueTarget);
+                    if (checkoutTargetDirty)
+                    {
+                        continue;
+                    }
+
+                    if (moveFailed)
+                    {
+                        state = CustomerState.Leaving;
+                        continue;
+                    }
+
+                    arrivedAtCheckoutTarget = true;
+                }
+
+                if (agent != null)
+                {
+                    agent.isStopped = true;
+                }
+
+                state = CustomerState.WaitingCheckout;
+                if (isCheckoutFront && checkout != null)
+                {
+                    checkout.TryBeginCheckout(this);
+                }
+
+                yield return null;
+            }
+        }
+
+        checkoutTargetDirty = false;
+        if (agent != null)
+        {
+            agent.isStopped = false;
+        }
+
+        if (checkout != null)
+        {
+            checkout.ReleaseCustomer(this);
         }
 
         state = CustomerState.Leaving;
@@ -129,6 +251,17 @@ public class CustomerMover : MonoBehaviour
         }
 
         FinishVisit();
+    }
+
+    CustomerState BeginCheckout()
+    {
+        if (checkout != null && checkout.TryEnqueue(this))
+        {
+            return CustomerState.MovingToCheckout;
+        }
+
+        WarnOnce("CustomerMover: 계산대 줄에 들어가지 못해 퇴장합니다.");
+        return CustomerState.Leaving;
     }
 
     CustomerState BeginAnotherShelfAttempt(ref bool retried, ref Shelf excludedShelf, Shelf failedShelf)
@@ -232,7 +365,7 @@ public class CustomerMover : MonoBehaviour
         float stuckTime = 0f;
         string destinationName = destination != null ? destination.name : "목적지";
 
-        while (!visitCompleted)
+        while (!visitCompleted && !checkoutTargetDirty)
         {
             if (agent.pathPending)
             {
@@ -280,6 +413,11 @@ public class CustomerMover : MonoBehaviour
         }
 
         visitCompleted = true;
+        if (checkout != null)
+        {
+            checkout.ReleaseCustomer(this);
+        }
+
         if (spawner != null)
         {
             spawner.NotifyDeparted();
@@ -290,6 +428,11 @@ public class CustomerMover : MonoBehaviour
 
     void OnDestroy()
     {
+        if (checkout != null)
+        {
+            checkout.ReleaseCustomer(this);
+        }
+
         if (visitCompleted || spawner == null)
         {
             return;
