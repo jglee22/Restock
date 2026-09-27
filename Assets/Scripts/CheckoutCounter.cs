@@ -2,11 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-// 계산대 하나의 줄을 순서대로 진행한다.
-// 가격, 매출, 재고는 바꾸지 않는다.
+// 계산대 하나의 줄을 순서대로 진행하고, 계산이 끝난 판매만 기록한다.
+// 재고는 바꾸지 않는다.
 public class CheckoutCounter : MonoBehaviour
 {
     [SerializeField] Transform[] queuePoints;
+    [SerializeField] StoreEconomy economy;
     [SerializeField] float checkoutDuration = 1.5f;
 
     readonly List<CustomerMover> queue = new List<CustomerMover>();
@@ -93,8 +94,26 @@ public class CheckoutCounter : MonoBehaviour
         UpdateQueueTargets();
         if (customer != null)
         {
+            RecordCompletedSale(customer);
             customer.NotifyCheckoutCompleted();
         }
+    }
+
+    void RecordCompletedSale(CustomerMover customer)
+    {
+        if (customer.HeldProduct == null)
+        {
+            WarnOnce("CheckoutCounter: 계산을 마친 고객이 상품을 들고 있지 않아 매출을 기록하지 않습니다.");
+            return;
+        }
+
+        if (economy == null)
+        {
+            WarnOnce("CheckoutCounter: StoreEconomy가 연결되지 않아 매출을 기록하지 못했습니다.");
+            return;
+        }
+
+        economy.RecordSale(customer.HeldProduct);
     }
 
     void UpdateQueueTargets()

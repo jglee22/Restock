@@ -36,6 +36,8 @@ public class StoreSession : MonoBehaviour
     float playingTimeScale = NormalTimeScale;
     bool isPaused;
 
+    public event System.Action<int> DayStarted;
+
     public StorePhase Phase => phase;
     public int Day => day;
     public bool IsPaused => isPaused;
@@ -143,6 +145,7 @@ public class StoreSession : MonoBehaviour
         phase = StorePhase.Preparation;
         isPaused = false;
         Time.timeScale = NormalTimeScale;
+        DayStarted?.Invoke(day);
     }
 
     public void TogglePause()
