@@ -3344,6 +3344,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StoreHud
   session: {fileID: 876268976}
+  customerSpawner: {fileID: 1455372553}
   dayText: {fileID: 420003}
   timeText: {fileID: 430003}
   phaseText: {fileID: 1950136369}
