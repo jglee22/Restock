@@ -2011,6 +2011,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1561929188235634180, guid: 60f260d8ad354831b6b56c846b45c575, type: 3}
+      propertyPath: economy
+      value: 
+      objectReference: {fileID: 934487145}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2204,7 +2208,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: -28}
-  m_SizeDelta: {x: -48, y: 72}
+  m_SizeDelta: {x: -48, y: 96}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &78233979
 CanvasRenderer:
@@ -3344,10 +3348,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StoreHud
   session: {fileID: 876268976}
+  economy: {fileID: 934487145}
   customerSpawner: {fileID: 1455372553}
   dayText: {fileID: 420003}
   timeText: {fileID: 430003}
   phaseText: {fileID: 1950136369}
+  moneyText: {fileID: 440003}
   resultText: {fileID: 78233980}
   startBusinessButton: {fileID: 1056906817}
   showResultButton: {fileID: 1404972524}
@@ -3385,6 +3391,52 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 876268974}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &934487144
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 934487146}
+  - component: {fileID: 934487145}
+  m_Layer: 0
+  m_Name: StoreEconomy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &934487145
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 934487144}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ca00fbb1956bbf4c92555d5df038b77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StoreEconomy
+  session: {fileID: 876268976}
+  startingMoney: 500000
+--- !u!4 &934487146
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 934487144}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -5244,3 +5296,4 @@ SceneRoots:
   - {fileID: 2053448248}
   - {fileID: 1410325860}
   - {fileID: 1455372554}
+  - {fileID: 934487146}

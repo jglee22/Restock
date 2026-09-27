@@ -3,14 +3,16 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // 기존 Day/Time TMP와 Phase 1 버튼을 StoreSession 상태에 맞춘다.
-// MoneyText는 이 스크립트가 갱신하지 않는다.
+// MoneyText는 StoreEconomy의 보유 자금을 표시한다.
 public class StoreHud : MonoBehaviour
 {
     [SerializeField] StoreSession session;
+    [SerializeField] StoreEconomy economy;
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
     [SerializeField] TMP_Text phaseText;
+    [SerializeField] TMP_Text moneyText;
     [SerializeField] TMP_Text resultText;
 
     [SerializeField] Button startBusinessButton;
@@ -27,6 +29,9 @@ public class StoreHud : MonoBehaviour
 
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
+    int displayedMoney = int.MinValue;
+    int displayedRevenue = int.MinValue;
+    int displayedResultDay = int.MinValue;
     bool hasWarned;
 
     void Awake()
@@ -87,10 +92,11 @@ public class StoreHud : MonoBehaviour
         SetText(timeText, session.TimeLabel);
         SetText(phaseText, session.Phase.ToString());
         SetText(skipTimeLabel, session.SkipTimeLabel);
+        RefreshMoney();
 
         if (session.Phase == StorePhase.Result)
         {
-            SetText(resultText, $"{session.DayLabel} 종료");
+            RefreshResult();
         }
 
         if (!forceVisibility && session.Phase == displayedPhase)
@@ -125,6 +131,46 @@ public class StoreHud : MonoBehaviour
         }
 
         return customerSpawner.ActiveCustomerCount <= 0;
+    }
+
+    void RefreshMoney()
+    {
+        if (economy == null)
+        {
+            WarnOnce("StoreHud: StoreEconomy가 연결되지 않아 보유 자금을 표시할 수 없습니다.");
+            return;
+        }
+
+        if (displayedMoney == economy.CurrentMoney)
+        {
+            return;
+        }
+
+        displayedMoney = economy.CurrentMoney;
+        SetText(moneyText, FormatWon(displayedMoney));
+    }
+
+    void RefreshResult()
+    {
+        if (economy == null)
+        {
+            WarnOnce("StoreHud: StoreEconomy가 연결되지 않아 오늘 매출을 표시할 수 없습니다.");
+            return;
+        }
+
+        if (displayedResultDay == session.Day && displayedRevenue == economy.DailyRevenue)
+        {
+            return;
+        }
+
+        displayedResultDay = session.Day;
+        displayedRevenue = economy.DailyRevenue;
+        SetText(resultText, $"{session.DayLabel} 종료\n오늘 매출 {FormatWon(displayedRevenue)}");
+    }
+
+    static string FormatWon(int amount)
+    {
+        return "₩" + amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     void OnStartBusiness()
@@ -205,6 +251,11 @@ public class StoreHud : MonoBehaviour
         if (customerSpawner == null)
         {
             Debug.LogWarning("StoreHud: CustomerSpawner가 연결되지 않았습니다.", this);
+        }
+
+        if (economy == null)
+        {
+            Debug.LogWarning("StoreHud: StoreEconomy가 연결되지 않았습니다.", this);
         }
     }
 
