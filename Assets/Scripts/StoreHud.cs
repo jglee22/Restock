@@ -26,11 +26,13 @@ public class StoreHud : MonoBehaviour
 
     [SerializeField] GameObject speedControls;
     [SerializeField] GameObject resultPanel;
+    [SerializeField] GameObject orderPanel;
 
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
     int displayedMoney = int.MinValue;
     int displayedRevenue = int.MinValue;
+    int displayedExpense = int.MinValue;
     int displayedResultDay = int.MinValue;
     bool hasWarned;
 
@@ -115,6 +117,7 @@ public class StoreHud : MonoBehaviour
         SetButtonInteractable(showResultButton, CanShowResult());
         SetObjectVisible(speedControls, session.Phase == StorePhase.Open);
         SetObjectVisible(resultPanel, session.Phase == StorePhase.Result);
+        SetObjectVisible(orderPanel, session.Phase == StorePhase.Preparation);
     }
 
     bool CanShowResult()
@@ -158,19 +161,34 @@ public class StoreHud : MonoBehaviour
             return;
         }
 
-        if (displayedResultDay == session.Day && displayedRevenue == economy.DailyRevenue)
+        if (displayedResultDay == session.Day
+            && displayedRevenue == economy.DailyRevenue
+            && displayedExpense == economy.DailyExpense)
         {
             return;
         }
 
         displayedResultDay = session.Day;
         displayedRevenue = economy.DailyRevenue;
-        SetText(resultText, $"{session.DayLabel} 종료\n오늘 매출 {FormatWon(displayedRevenue)}");
+        displayedExpense = economy.DailyExpense;
+        SetText(
+            resultText,
+            $"{session.DayLabel} 종료\n오늘 매출 {FormatWon(displayedRevenue)}\n매입 비용 {FormatWon(displayedExpense)}\n순이익 {FormatSignedWon(economy.NetProfit)}");
     }
 
     static string FormatWon(int amount)
     {
         return "₩" + amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    static string FormatSignedWon(int amount)
+    {
+        if (amount < 0)
+        {
+            return "-" + FormatWon(-amount);
+        }
+
+        return FormatWon(amount);
     }
 
     void OnStartBusiness()
@@ -256,6 +274,11 @@ public class StoreHud : MonoBehaviour
         if (economy == null)
         {
             Debug.LogWarning("StoreHud: StoreEconomy가 연결되지 않았습니다.", this);
+        }
+
+        if (orderPanel == null)
+        {
+            Debug.LogWarning("StoreHud: OrderPanel이 연결되지 않았습니다.", this);
         }
     }
 
