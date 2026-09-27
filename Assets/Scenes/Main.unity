@@ -1941,6 +1941,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3721968509293604497, guid: 5019f73ba3f74115a59576fa28145c40, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 1.7
+      objectReference: {fileID: 0}
     - target: {fileID: 7647654925452472432, guid: 5019f73ba3f74115a59576fa28145c40, type: 3}
       propertyPath: storeInventory
       value: 
@@ -2433,6 +2437,17 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &400302501 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7647654925452472432, guid: 5019f73ba3f74115a59576fa28145c40, type: 3}
+  m_PrefabInstance: {fileID: 530001}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7534b6516a8c72849abfcd0e26e6ccbe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Shelf
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -2764,6 +2779,28 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &634315563 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7647654925452472432, guid: 5019f73ba3f74115a59576fa28145c40, type: 3}
+  m_PrefabInstance: {fileID: 510001}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7534b6516a8c72849abfcd0e26e6ccbe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Shelf
+--- !u!114 &650340465 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7647654925452472432, guid: 5019f73ba3f74115a59576fa28145c40, type: 3}
+  m_PrefabInstance: {fileID: 520001}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7534b6516a8c72849abfcd0e26e6ccbe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Shelf
 --- !u!1 &658422503
 GameObject:
   m_ObjectHideFlags: 0
@@ -4345,9 +4382,13 @@ MonoBehaviour:
   spawnPoint: {fileID: 658422504}
   insidePoint: {fileID: 2106587538}
   exitPoint: {fileID: 1733707626}
+  shoppingShelves:
+  - {fileID: 634315563}
+  - {fileID: 650340465}
+  - {fileID: 400302501}
   spawnInterval: 4
   maxActiveCustomers: 5
-  insideStayDuration: 2.5
+  browseDuration: 1.2
 --- !u!4 &1455372554
 Transform:
   m_ObjectHideFlags: 0

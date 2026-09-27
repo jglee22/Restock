@@ -7,7 +7,12 @@ public class Shelf : MonoBehaviour
     [SerializeField] StoreInventory storeInventory;
     [SerializeField] ProductStorageType acceptedStorageType = ProductStorageType.Shelf;
     [SerializeField] ProductDefinition assignedProduct;
+    [SerializeField] Transform customerStandPoint;
     [SerializeField] int currentQuantity;
+
+    public ProductDefinition AssignedProduct => assignedProduct;
+
+    public Transform CustomerStandPoint => customerStandPoint;
 
     public int CurrentQuantity => currentQuantity;
 
@@ -180,6 +185,11 @@ public class Shelf : MonoBehaviour
             Debug.LogWarning(
                 $"Shelf: 진열 수량이 최대 수량 {Capacity}을 넘습니다. 현재 값: {currentQuantity}",
                 this);
+        }
+
+        if (customerStandPoint == null)
+        {
+            Debug.LogWarning("Shelf: CustomerStandPoint가 연결되지 않았습니다.", this);
         }
     }
 

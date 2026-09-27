@@ -9,9 +9,10 @@ public class CustomerSpawner : MonoBehaviour
     [SerializeField] Transform spawnPoint;
     [SerializeField] Transform insidePoint;
     [SerializeField] Transform exitPoint;
+    [SerializeField] Shelf[] shoppingShelves;
     [SerializeField] float spawnInterval = 4f;
     [SerializeField] int maxActiveCustomers = 5;
-    [SerializeField] float insideStayDuration = 2.5f;
+    [SerializeField] float browseDuration = 1.2f;
 
     int activeCustomerCount;
     float spawnTimer;
@@ -68,7 +69,7 @@ public class CustomerSpawner : MonoBehaviour
         }
 
         activeCustomerCount += 1;
-        customer.Begin(this, insidePoint, exitPoint, insideStayDuration);
+        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration);
     }
 
     void WarnOnce(string message)
