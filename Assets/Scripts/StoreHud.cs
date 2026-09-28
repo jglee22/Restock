@@ -23,6 +23,8 @@ public class StoreHud : MonoBehaviour
     [SerializeField] Button speed2Button;
     [SerializeField] Button speed3Button;
     [SerializeField] Button skipTimeButton;
+    [SerializeField] Button restockShelvesButton;
+    [SerializeField] Shelf[] restockShelves;
 
     [SerializeField] GameObject speedControls;
     [SerializeField] GameObject resultPanel;
@@ -60,6 +62,7 @@ public class StoreHud : MonoBehaviour
         Bind(speed2Button, OnSpeed2);
         Bind(speed3Button, OnSpeed3);
         Bind(skipTimeButton, OnSkipTime);
+        Bind(restockShelvesButton, OnRestockShelves);
     }
 
     void Start()
@@ -77,6 +80,7 @@ public class StoreHud : MonoBehaviour
         Unbind(speed2Button, OnSpeed2);
         Unbind(speed3Button, OnSpeed3);
         Unbind(skipTimeButton, OnSkipTime);
+        Unbind(restockShelvesButton, OnRestockShelves);
     }
 
     void Update()
@@ -120,6 +124,7 @@ public class StoreHud : MonoBehaviour
         SetObjectVisible(resultPanel, session.Phase == StorePhase.Result);
         SetObjectVisible(orderPanel, session.Phase == StorePhase.Preparation);
         SetObjectVisible(pricePanel, session.Phase == StorePhase.Preparation);
+        SetButtonVisible(restockShelvesButton, session.Phase == StorePhase.Preparation || session.Phase == StorePhase.Open);
     }
 
     bool CanShowResult()
@@ -242,6 +247,27 @@ public class StoreHud : MonoBehaviour
         Refresh(forceVisibility: true);
     }
 
+    void OnRestockShelves()
+    {
+        if (restockShelves == null)
+        {
+            WarnOnce("StoreHud: 진열할 Shelf가 연결되지 않았습니다.");
+            return;
+        }
+
+        for (int index = 0; index < restockShelves.Length; index++)
+        {
+            Shelf shelf = restockShelves[index];
+            if (shelf == null || shelf.AssignedProduct == null)
+            {
+                continue;
+            }
+
+            int transferred = shelf.RestockToFull();
+            Debug.Log($"Shelf: 창고에서 {transferred}개를 진열했습니다. {shelf.CurrentQuantity}/{shelf.Capacity}", shelf);
+        }
+    }
+
     static void Bind(Button button, UnityEngine.Events.UnityAction action)
     {
         if (button != null)
@@ -286,6 +312,11 @@ public class StoreHud : MonoBehaviour
         if (pricePanel == null)
         {
             Debug.LogWarning("StoreHud: PricePanel이 연결되지 않았습니다.", this);
+        }
+
+        if (restockShelvesButton == null)
+        {
+            Debug.LogWarning("StoreHud: 진열 채우기 버튼이 연결되지 않았습니다.", this);
         }
     }
 

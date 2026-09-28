@@ -100,6 +100,22 @@ public class Shelf : MonoBehaviour
         return true;
     }
 
+    public int RestockToFull()
+    {
+        if (assignedProduct == null || storeInventory == null)
+        {
+            return RestockFromInventory(1);
+        }
+
+        int space = Mathf.Max(0, Capacity - currentQuantity);
+        if (space <= 0)
+        {
+            return 0;
+        }
+
+        return RestockFromInventory(space);
+    }
+
     [ContextMenu("Debug/Restock To Full")]
     void DebugRestockToFull()
     {
@@ -108,14 +124,7 @@ public class Shelf : MonoBehaviour
             return;
         }
 
-        if (assignedProduct == null || storeInventory == null)
-        {
-            RestockFromInventory(1);
-            return;
-        }
-
-        int space = Mathf.Max(0, Capacity - currentQuantity);
-        int transferred = space > 0 ? RestockFromInventory(space) : 0;
+        int transferred = RestockToFull();
         Debug.Log($"Shelf: 창고에서 {transferred}개를 진열했습니다. {CurrentQuantity}/{Capacity}", this);
     }
 
