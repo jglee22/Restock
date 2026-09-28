@@ -30,6 +30,11 @@ public class StoreInventory : MonoBehaviour
         {
             quantity -= amount;
         }
+
+        public void SetQuantity(int value)
+        {
+            quantity = value;
+        }
     }
 
     [SerializeField] List<InventoryEntry> entries = new List<InventoryEntry>();
@@ -77,6 +82,33 @@ public class StoreInventory : MonoBehaviour
         }
 
         entry.RemoveQuantity(amount);
+        return true;
+    }
+
+    public bool TryRestoreQuantity(ProductDefinition product, int quantity)
+    {
+        if (product == null)
+        {
+            Debug.LogWarning("StoreInventory: 복원할 ProductDefinition이 없습니다.", this);
+            return false;
+        }
+
+        if (quantity < 0)
+        {
+            Debug.LogWarning(
+                $"StoreInventory: 복원 수량은 0 이상이어야 합니다. 상품: {product.DisplayName}, 수량: {quantity}",
+                this);
+            return false;
+        }
+
+        InventoryEntry entry = FindEntry(product);
+        if (entry == null)
+        {
+            entries.Add(new InventoryEntry(product, quantity));
+            return true;
+        }
+
+        entry.SetQuantity(quantity);
         return true;
     }
 

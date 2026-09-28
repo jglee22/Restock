@@ -4,11 +4,16 @@ using UnityEngine;
 // 창고 수량은 StoreInventory API로만 바꾸고, 상품 정의 Asset은 수정하지 않는다.
 public class Shelf : MonoBehaviour
 {
+    [SerializeField] string saveId;
     [SerializeField] StoreInventory storeInventory;
     [SerializeField] ProductStorageType acceptedStorageType = ProductStorageType.Shelf;
     [SerializeField] ProductDefinition assignedProduct;
     [SerializeField] Transform customerStandPoint;
     [SerializeField] int currentQuantity;
+
+    public string SaveId => saveId;
+
+    public ProductStorageType AcceptedStorageType => acceptedStorageType;
 
     public ProductDefinition AssignedProduct => assignedProduct;
 
@@ -40,6 +45,48 @@ public class Shelf : MonoBehaviour
         }
 
         assignedProduct = product;
+        return true;
+    }
+
+    public bool TryRestoreState(ProductDefinition product, int quantity)
+    {
+        if (quantity < 0)
+        {
+            Debug.LogWarning($"Shelf: 복원 수량은 0 이상이어야 합니다. 현재 값: {quantity}", this);
+            return false;
+        }
+
+        if (product == null)
+        {
+            if (quantity != 0)
+            {
+                Debug.LogWarning("Shelf: 진열 상품이 없으면 수량은 0이어야 합니다.", this);
+                return false;
+            }
+
+            assignedProduct = null;
+            currentQuantity = 0;
+            return true;
+        }
+
+        if (!CanDisplayProduct(product))
+        {
+            Debug.LogWarning(
+                $"Shelf: {product.DisplayName}의 보관 타입이 {acceptedStorageType} 진열대와 맞지 않습니다.",
+                this);
+            return false;
+        }
+
+        if (quantity > product.MaxShelfCount)
+        {
+            Debug.LogWarning(
+                $"Shelf: 복원 수량 {quantity}이 최대 수량 {product.MaxShelfCount}을 넘습니다.",
+                this);
+            return false;
+        }
+
+        assignedProduct = product;
+        currentQuantity = quantity;
         return true;
     }
 
