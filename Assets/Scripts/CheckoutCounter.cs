@@ -101,15 +101,10 @@ public class CheckoutCounter : MonoBehaviour
 
     void RecordCompletedSale(CustomerMover customer)
     {
-        if (customer.HeldProduct == null)
+        IReadOnlyList<CustomerBasketItem> items = customer.BasketItems;
+        if (items == null || items.Count == 0)
         {
-            WarnOnce("CheckoutCounter: 계산을 마친 고객이 상품을 들고 있지 않아 매출을 기록하지 않습니다.");
-            return;
-        }
-
-        if (!customer.HasHeldUnitPrice)
-        {
-            WarnOnce("CheckoutCounter: 계산을 마친 고객의 판매 가격이 없어 매출을 기록하지 않습니다.");
+            WarnOnce("CheckoutCounter: 계산을 마친 고객의 장바구니가 비어 있어 매출을 기록하지 않습니다.");
             return;
         }
 
@@ -119,7 +114,21 @@ public class CheckoutCounter : MonoBehaviour
             return;
         }
 
-        economy.RecordSale(customer.HeldProduct, customer.HeldUnitPrice);
+        for (int index = 0; index < items.Count; index++)
+        {
+            CustomerBasketItem item = items[index];
+            if (item.Product == null || item.UnitPrice < 0)
+            {
+                WarnOnce("CheckoutCounter: 장바구니에 판매할 수 없는 상품이 있어 매출을 기록하지 않습니다.");
+                return;
+            }
+        }
+
+        for (int index = 0; index < items.Count; index++)
+        {
+            CustomerBasketItem item = items[index];
+            economy.RecordSale(item.Product, item.UnitPrice);
+        }
     }
 
     void UpdateQueueTargets()

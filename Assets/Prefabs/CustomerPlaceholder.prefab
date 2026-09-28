@@ -150,3 +150,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3cfbfddfcc9ff484abd5ea33577ee5f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CustomerMover
+  minTargetItems: 1
+  maxTargetItems: 3

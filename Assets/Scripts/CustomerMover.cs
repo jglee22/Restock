@@ -1,7 +1,20 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-// 고객 한 명이 상품을 하나 집으면 계산대 줄을 거쳐 나간다.
+public readonly struct CustomerBasketItem
+{
+    public CustomerBasketItem(ProductDefinition product, int unitPrice)
+    {
+        Product = product;
+        UnitPrice = unitPrice;
+    }
+
+    public ProductDefinition Product { get; }
+    public int UnitPrice { get; }
+}
+
+// 고객 한 명이 서로 다른 상품을 장바구니에 담은 뒤 한 번 계산하고 나간다.
 // 창고 재고는 건드리지 않고, 계산대에서 Shelf 수량을 다시 줄이지 않는다.
 public class CustomerMover : MonoBehaviour
 {
@@ -10,7 +23,6 @@ public class CustomerMover : MonoBehaviour
     const float ArrivalSlack = 0.15f;
     const float CertainPurchasePriceRatio = 0.5f;
     const float RejectPurchasePriceRatio = 2f;
-    const int NoHeldUnitPrice = -1;
 
     enum CustomerState
     {
@@ -32,8 +44,11 @@ public class CustomerMover : MonoBehaviour
     CheckoutCounter checkout;
     StorePricing pricing;
     float browseDuration;
-    ProductDefinition heldProduct;
-    int heldUnitPrice = NoHeldUnitPrice;
+    [SerializeField] int minTargetItems = 1;
+    [SerializeField] int maxTargetItems = 3;
+    readonly List<CustomerBasketItem> basket = new List<CustomerBasketItem>();
+    readonly HashSet<ProductDefinition> attemptedProducts = new HashSet<ProductDefinition>();
+    int targetItemCount;
     Transform checkoutQueueTarget;
     bool checkoutTargetDirty;
     bool arrivedAtCheckoutTarget;
@@ -44,11 +59,9 @@ public class CustomerMover : MonoBehaviour
     bool moveFailed;
     bool hasWarned;
 
-    public ProductDefinition HeldProduct => heldProduct;
+    public IReadOnlyList<CustomerBasketItem> BasketItems => basket;
 
-    public int HeldUnitPrice => heldUnitPrice;
-
-    public bool HasHeldUnitPrice => heldUnitPrice >= 0;
+    public int BasketCount => basket.Count;
 
     public void Begin(
         CustomerSpawner owner,
@@ -66,6 +79,9 @@ public class CustomerMover : MonoBehaviour
         browseDuration = browse;
         checkout = checkoutCounter;
         pricing = storePricing;
+        basket.Clear();
+        attemptedProducts.Clear();
+        targetItemCount = NextTargetItemCount();
         agent = GetComponent<NavMeshAgent>();
         StartCoroutine(Visit());
     }
@@ -155,7 +171,7 @@ public class CustomerMover : MonoBehaviour
             {
                 chosenShelf = ChooseShelf(excludedShelf);
                 state = chosenShelf == null
-                    ? CustomerState.Leaving
+                    ? FinishShopping()
                     : CustomerState.MovingToShelf;
                 continue;
             }
@@ -182,23 +198,22 @@ public class CustomerMover : MonoBehaviour
             if (state == CustomerState.Browsing)
             {
                 yield return new WaitForSeconds(browseDuration);
-                int unitPrice = NoHeldUnitPrice;
                 ProductDefinition browsedProduct = chosenShelf.AssignedProduct;
-                if (browsedProduct != null && !WantsToBuy(browsedProduct, out unitPrice))
+                if (browsedProduct != null)
                 {
-                    state = CustomerState.Leaving;
-                    continue;
+                    attemptedProducts.Add(browsedProduct);
+                    if (WantsToBuy(browsedProduct, out int unitPrice) && chosenShelf.TryTakeOne() && !BasketContains(browsedProduct))
+                    {
+                        basket.Add(new CustomerBasketItem(browsedProduct, unitPrice));
+                    }
                 }
 
-                if (chosenShelf.TryTakeOne())
-                {
-                    heldProduct = chosenShelf.AssignedProduct;
-                    heldUnitPrice = unitPrice;
-                    state = BeginCheckout();
-                    continue;
-                }
-
-                state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
+                retried = false;
+                excludedShelf = null;
+                state = basket.Count >= targetItemCount
+                    ? BeginCheckout()
+                    : CustomerState.SelectingProduct;
+                continue;
             }
 
             if (state == CustomerState.CheckingOut)
@@ -276,9 +291,44 @@ public class CustomerMover : MonoBehaviour
         FinishVisit();
     }
 
+    int NextTargetItemCount()
+    {
+        int minimum = Mathf.Max(1, minTargetItems);
+        int maximum = Mathf.Max(minimum, maxTargetItems);
+        if (maximum == int.MaxValue)
+        {
+            return maximum;
+        }
+
+        return Random.Range(minimum, maximum + 1);
+    }
+
+    bool BasketContains(ProductDefinition product)
+    {
+        for (int index = 0; index < basket.Count; index++)
+        {
+            if (basket[index].Product == product)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    CustomerState FinishShopping()
+    {
+        if (basket.Count > 0)
+        {
+            return BeginCheckout();
+        }
+
+        return CustomerState.Leaving;
+    }
+
     bool WantsToBuy(ProductDefinition product, out int unitPrice)
     {
-        unitPrice = NoHeldUnitPrice;
+        unitPrice = 0;
         if (pricing == null)
         {
             WarnOnce("CustomerMover: StorePricing이 연결되지 않아 구매를 판단할 수 없습니다.");
@@ -288,14 +338,12 @@ public class CustomerMover : MonoBehaviour
         if (!pricing.TryGetCurrentPrice(product, out unitPrice))
         {
             WarnOnce($"CustomerMover: {product.DisplayName}의 현재 판매 가격이 없습니다.");
-            unitPrice = NoHeldUnitPrice;
             return false;
         }
 
         if (product.BaseSellPrice <= 0)
         {
             WarnOnce($"CustomerMover: {product.DisplayName}의 Base Sell Price가 0 이하라 구매 확률을 계산할 수 없습니다.");
-            unitPrice = NoHeldUnitPrice;
             return false;
         }
 
@@ -331,6 +379,11 @@ public class CustomerMover : MonoBehaviour
 
     CustomerState BeginCheckout()
     {
+        if (basket.Count <= 0)
+        {
+            return CustomerState.Leaving;
+        }
+
         if (checkout != null && checkout.TryEnqueue(this))
         {
             return CustomerState.MovingToCheckout;
@@ -344,7 +397,7 @@ public class CustomerMover : MonoBehaviour
     {
         if (retried)
         {
-            return CustomerState.Leaving;
+            return FinishShopping();
         }
 
         retried = true;
@@ -395,11 +448,12 @@ public class CustomerMover : MonoBehaviour
         return null;
     }
 
-    static bool CanShop(Shelf shelf, Shelf excludedShelf)
+    bool CanShop(Shelf shelf, Shelf excludedShelf)
     {
         return shelf != null
             && shelf != excludedShelf
             && shelf.AssignedProduct != null
+            && !attemptedProducts.Contains(shelf.AssignedProduct)
             && shelf.CurrentQuantity > 0
             && !shelf.IsEmpty
             && shelf.CustomerStandPoint != null;
@@ -544,6 +598,19 @@ public class CustomerMover : MonoBehaviour
 
         visitCompleted = true;
         spawner.NotifyDeparted();
+    }
+
+    void OnValidate()
+    {
+        if (minTargetItems < 1)
+        {
+            Debug.LogWarning($"CustomerMover: Min Target Items는 1 이상이어야 합니다. 현재 값: {minTargetItems}", this);
+        }
+
+        if (maxTargetItems < minTargetItems)
+        {
+            Debug.LogWarning($"CustomerMover: Max Target Items는 Min Target Items 이상이어야 합니다. 현재 값: {maxTargetItems}", this);
+        }
     }
 
     void WarnOnce(string message)
