@@ -7,6 +7,10 @@ public class CustomerMover : MonoBehaviour
 {
     const float StuckTimeout = 2f;
     const float DestinationSampleRadius = 1f;
+    const float ArrivalSlack = 0.15f;
+    const float CertainPurchasePriceRatio = 0.5f;
+    const float RejectPurchasePriceRatio = 2f;
+    const int NoHeldUnitPrice = -1;
 
     enum CustomerState
     {
@@ -26,8 +30,10 @@ public class CustomerMover : MonoBehaviour
     Transform exitPoint;
     Shelf[] shoppingShelves;
     CheckoutCounter checkout;
+    StorePricing pricing;
     float browseDuration;
     ProductDefinition heldProduct;
+    int heldUnitPrice = NoHeldUnitPrice;
     Transform checkoutQueueTarget;
     bool checkoutTargetDirty;
     bool arrivedAtCheckoutTarget;
@@ -40,13 +46,18 @@ public class CustomerMover : MonoBehaviour
 
     public ProductDefinition HeldProduct => heldProduct;
 
+    public int HeldUnitPrice => heldUnitPrice;
+
+    public bool HasHeldUnitPrice => heldUnitPrice >= 0;
+
     public void Begin(
         CustomerSpawner owner,
         Transform inside,
         Transform exit,
         Shelf[] shelves,
         float browse,
-        CheckoutCounter checkoutCounter)
+        CheckoutCounter checkoutCounter,
+        StorePricing storePricing)
     {
         spawner = owner;
         insidePoint = inside;
@@ -54,6 +65,7 @@ public class CustomerMover : MonoBehaviour
         shoppingShelves = shelves;
         browseDuration = browse;
         checkout = checkoutCounter;
+        pricing = storePricing;
         agent = GetComponent<NavMeshAgent>();
         StartCoroutine(Visit());
     }
@@ -125,7 +137,7 @@ public class CustomerMover : MonoBehaviour
             yield break;
         }
 
-        yield return WaitUntilArrived(insidePoint);
+        yield return WaitUntilArrived(insidePoint, acceptNearbyStop: true);
         if (moveFailed)
         {
             FinishVisit();
@@ -156,7 +168,7 @@ public class CustomerMover : MonoBehaviour
                     continue;
                 }
 
-                yield return WaitUntilArrived(chosenShelf.CustomerStandPoint);
+                yield return WaitUntilArrived(chosenShelf.CustomerStandPoint, acceptNearbyStop: true);
                 if (moveFailed)
                 {
                     state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
@@ -170,9 +182,18 @@ public class CustomerMover : MonoBehaviour
             if (state == CustomerState.Browsing)
             {
                 yield return new WaitForSeconds(browseDuration);
+                int unitPrice = NoHeldUnitPrice;
+                ProductDefinition browsedProduct = chosenShelf.AssignedProduct;
+                if (browsedProduct != null && !WantsToBuy(browsedProduct, out unitPrice))
+                {
+                    state = CustomerState.Leaving;
+                    continue;
+                }
+
                 if (chosenShelf.TryTakeOne())
                 {
                     heldProduct = chosenShelf.AssignedProduct;
+                    heldUnitPrice = unitPrice;
                     state = BeginCheckout();
                     continue;
                 }
@@ -237,6 +258,8 @@ public class CustomerMover : MonoBehaviour
         if (agent != null)
         {
             agent.isStopped = false;
+            // 계산을 마친 고객이 줄 맨 앞에 멈춰 있으면 다음 고객이 그 자리에 도착하지 못한다.
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
         }
 
         if (checkout != null)
@@ -247,10 +270,63 @@ public class CustomerMover : MonoBehaviour
         state = CustomerState.Leaving;
         if (TrySetDestination(exitPoint))
         {
-            yield return WaitUntilArrived(exitPoint);
+            yield return WaitUntilArrived(exitPoint, acceptNearbyStop: true);
         }
 
         FinishVisit();
+    }
+
+    bool WantsToBuy(ProductDefinition product, out int unitPrice)
+    {
+        unitPrice = NoHeldUnitPrice;
+        if (pricing == null)
+        {
+            WarnOnce("CustomerMover: StorePricing이 연결되지 않아 구매를 판단할 수 없습니다.");
+            return false;
+        }
+
+        if (!pricing.TryGetCurrentPrice(product, out unitPrice))
+        {
+            WarnOnce($"CustomerMover: {product.DisplayName}의 현재 판매 가격이 없습니다.");
+            unitPrice = NoHeldUnitPrice;
+            return false;
+        }
+
+        if (product.BaseSellPrice <= 0)
+        {
+            WarnOnce($"CustomerMover: {product.DisplayName}의 Base Sell Price가 0 이하라 구매 확률을 계산할 수 없습니다.");
+            unitPrice = NoHeldUnitPrice;
+            return false;
+        }
+
+        float chance = CalculatePurchaseChance(unitPrice, product.BaseSellPrice, product.Popularity);
+        return Random.value < chance;
+    }
+
+    static float CalculatePurchaseChance(int currentPrice, int basePrice, float popularity)
+    {
+        float ratio = currentPrice / (float)basePrice;
+        float chance;
+        if (ratio <= CertainPurchasePriceRatio)
+        {
+            chance = 1f;
+        }
+        else if (ratio >= RejectPurchasePriceRatio)
+        {
+            chance = 0f;
+        }
+        else if (ratio <= 1f)
+        {
+            float t = (ratio - CertainPurchasePriceRatio) / (1f - CertainPurchasePriceRatio);
+            chance = Mathf.Lerp(1f, popularity, t);
+        }
+        else
+        {
+            float t = (ratio - 1f) / (RejectPurchasePriceRatio - 1f);
+            chance = Mathf.Lerp(popularity, 0f, t);
+        }
+
+        return Mathf.Clamp01(chance);
     }
 
     CustomerState BeginCheckout()
@@ -360,10 +436,14 @@ public class CustomerMover : MonoBehaviour
         return false;
     }
 
-    System.Collections.IEnumerator WaitUntilArrived(Transform destination)
+    System.Collections.IEnumerator WaitUntilArrived(Transform destination, bool acceptNearbyStop = false)
     {
         float stuckTime = 0f;
+        float closestPlanarDistance = float.PositiveInfinity;
         string destinationName = destination != null ? destination.name : "목적지";
+        float exactArrivalDistance = agent.stoppingDistance + ArrivalSlack;
+        // 같은 지점에 서 있는 다른 고객 한 명 너머까지는 도착으로 본다.
+        float blockedArrivalDistance = exactArrivalDistance + agent.radius * 2f;
 
         while (!visitCompleted && !checkoutTargetDirty)
         {
@@ -380,18 +460,35 @@ public class CustomerMover : MonoBehaviour
                 yield break;
             }
 
-            if (agent.hasPath && agent.remainingDistance <= agent.stoppingDistance)
+            float planarDistance = PlanarDistance(transform.position, destination.position);
+            if (planarDistance <= exactArrivalDistance
+                || (agent.hasPath && agent.remainingDistance <= agent.stoppingDistance))
             {
                 yield break;
             }
 
-            if (agent.velocity.sqrMagnitude < 0.01f)
+            if (acceptNearbyStop
+                && planarDistance <= blockedArrivalDistance
+                && agent.velocity.sqrMagnitude < 0.01f)
+            {
+                yield break;
+            }
+
+            // 계산대 자리는 앞 고객이 비킬 때까지 기다린다. 2초 만에 포기하면 계산이 취소된다.
+            if (!acceptNearbyStop)
+            {
+                yield return null;
+                continue;
+            }
+
+            if (planarDistance < closestPlanarDistance - 0.05f)
+            {
+                closestPlanarDistance = planarDistance;
+                stuckTime = 0f;
+            }
+            else if (agent.velocity.sqrMagnitude < 0.01f)
             {
                 stuckTime += Time.deltaTime;
-            }
-            else
-            {
-                stuckTime = 0f;
             }
 
             if (stuckTime >= StuckTimeout)
@@ -403,6 +500,13 @@ public class CustomerMover : MonoBehaviour
 
             yield return null;
         }
+    }
+
+    static float PlanarDistance(Vector3 from, Vector3 to)
+    {
+        from.y = 0f;
+        to.y = 0f;
+        return Vector3.Distance(from, to);
     }
 
     void FinishVisit()

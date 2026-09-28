@@ -107,13 +107,19 @@ public class CheckoutCounter : MonoBehaviour
             return;
         }
 
+        if (!customer.HasHeldUnitPrice)
+        {
+            WarnOnce("CheckoutCounter: 계산을 마친 고객의 판매 가격이 없어 매출을 기록하지 않습니다.");
+            return;
+        }
+
         if (economy == null)
         {
             WarnOnce("CheckoutCounter: StoreEconomy가 연결되지 않아 매출을 기록하지 못했습니다.");
             return;
         }
 
-        economy.RecordSale(customer.HeldProduct);
+        economy.RecordSale(customer.HeldProduct, customer.HeldUnitPrice);
     }
 
     void UpdateQueueTargets()
