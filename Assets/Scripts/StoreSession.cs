@@ -148,6 +148,23 @@ public class StoreSession : MonoBehaviour
         DayStarted?.Invoke(day);
     }
 
+    public bool TryRestorePreparationState(int restoredDay)
+    {
+        if (restoredDay < 1)
+        {
+            Debug.LogWarning($"StoreSession: 복원할 Day는 1 이상이어야 합니다. 현재 값: {restoredDay}", this);
+            return false;
+        }
+
+        day = restoredDay;
+        phase = StorePhase.Preparation;
+        isPaused = false;
+        playingTimeScale = NormalTimeScale;
+        currentGameMinutes = OpeningTotalMinutes;
+        Time.timeScale = NormalTimeScale;
+        return true;
+    }
+
     public void TogglePause()
     {
         if (phase != StorePhase.Open)

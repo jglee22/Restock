@@ -11,6 +11,7 @@ public class StoreHud : MonoBehaviour
     [SerializeField] StoreSession session;
     [SerializeField] StoreEconomy economy;
     [SerializeField] StoreStatistics statistics;
+    [SerializeField] StorePersistence persistence;
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
@@ -27,12 +28,15 @@ public class StoreHud : MonoBehaviour
     [SerializeField] Button speed3Button;
     [SerializeField] Button skipTimeButton;
     [SerializeField] Button restockShelvesButton;
+    [SerializeField] Button saveButton;
+    [SerializeField] Button loadButton;
     [SerializeField] Shelf[] restockShelves;
 
     [SerializeField] GameObject speedControls;
     [SerializeField] GameObject resultPanel;
     [SerializeField] GameObject orderPanel;
     [SerializeField] GameObject pricePanel;
+    [SerializeField] GameObject saveLoadPanel;
 
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
@@ -69,6 +73,8 @@ public class StoreHud : MonoBehaviour
         Bind(speed3Button, OnSpeed3);
         Bind(skipTimeButton, OnSkipTime);
         Bind(restockShelvesButton, OnRestockShelves);
+        Bind(saveButton, OnSave);
+        Bind(loadButton, OnLoad);
     }
 
     void Start()
@@ -87,6 +93,8 @@ public class StoreHud : MonoBehaviour
         Unbind(speed3Button, OnSpeed3);
         Unbind(skipTimeButton, OnSkipTime);
         Unbind(restockShelvesButton, OnRestockShelves);
+        Unbind(saveButton, OnSave);
+        Unbind(loadButton, OnLoad);
     }
 
     void Update()
@@ -106,6 +114,7 @@ public class StoreHud : MonoBehaviour
         SetText(phaseText, session.Phase.ToString());
         SetText(skipTimeLabel, session.SkipTimeLabel);
         RefreshMoney();
+        RefreshLoadButton();
 
         if (session.Phase == StorePhase.Result)
         {
@@ -131,6 +140,16 @@ public class StoreHud : MonoBehaviour
         SetObjectVisible(orderPanel, session.Phase == StorePhase.Preparation);
         SetObjectVisible(pricePanel, session.Phase == StorePhase.Preparation);
         SetButtonVisible(restockShelvesButton, session.Phase == StorePhase.Preparation || session.Phase == StorePhase.Open);
+        SetObjectVisible(saveLoadPanel, session.Phase == StorePhase.Preparation);
+    }
+
+    void RefreshLoadButton()
+    {
+        bool canLoad = session != null
+            && session.Phase == StorePhase.Preparation
+            && persistence != null
+            && persistence.SaveFileExists;
+        SetButtonInteractable(loadButton, canLoad);
     }
 
     bool CanShowResult()
@@ -327,6 +346,38 @@ public class StoreHud : MonoBehaviour
         Refresh(forceVisibility: true);
     }
 
+    void OnSave()
+    {
+        if (persistence == null)
+        {
+            WarnOnce("StoreHud: StorePersistence가 연결되지 않아 저장할 수 없습니다.");
+            return;
+        }
+
+        if (persistence.TrySave())
+        {
+            RefreshLoadButton();
+        }
+    }
+
+    void OnLoad()
+    {
+        if (persistence == null)
+        {
+            WarnOnce("StoreHud: StorePersistence가 연결되지 않아 불러올 수 없습니다.");
+            return;
+        }
+
+        if (!persistence.TryLoad())
+        {
+            return;
+        }
+
+        displayedMoney = int.MinValue;
+        displayedResultDay = int.MinValue;
+        Refresh(forceVisibility: true);
+    }
+
     void OnRestockShelves()
     {
         if (restockShelves == null)
@@ -402,6 +453,21 @@ public class StoreHud : MonoBehaviour
         if (restockShelvesButton == null)
         {
             Debug.LogWarning("StoreHud: 진열 채우기 버튼이 연결되지 않았습니다.", this);
+        }
+
+        if (persistence == null)
+        {
+            Debug.LogWarning("StoreHud: StorePersistence가 연결되지 않았습니다.", this);
+        }
+
+        if (saveLoadPanel == null)
+        {
+            Debug.LogWarning("StoreHud: SaveLoadPanel이 연결되지 않았습니다.", this);
+        }
+
+        if (saveButton == null || loadButton == null)
+        {
+            Debug.LogWarning("StoreHud: 저장 또는 불러오기 버튼이 연결되지 않았습니다.", this);
         }
     }
 

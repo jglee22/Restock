@@ -139,7 +139,7 @@ public class StoreStatistics : MonoBehaviour
         ResetDailyStatistics();
     }
 
-    void ResetDailyStatistics()
+    public void ResetDailyStatistics()
     {
         visitorCount = 0;
         purchasingCustomerCount = 0;

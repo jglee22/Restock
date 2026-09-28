@@ -89,6 +89,22 @@ public class StoreEconomy : MonoBehaviour
         return true;
     }
 
+    public bool TryRestoreState(int money, int revenue, int expense)
+    {
+        if (money < 0 || revenue < 0 || expense < 0)
+        {
+            Debug.LogWarning(
+                $"StoreEconomy: 복원 값은 0 이상이어야 합니다. 자금: {money}, 매출: {revenue}, 매입: {expense}",
+                this);
+            return false;
+        }
+
+        currentMoney = money;
+        dailyRevenue = revenue;
+        dailyExpense = expense;
+        return true;
+    }
+
     void HandleDayStarted(int day)
     {
         dailyRevenue = 0;
