@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,6 +10,7 @@ public class StoreHud : MonoBehaviour
 {
     [SerializeField] StoreSession session;
     [SerializeField] StoreEconomy economy;
+    [SerializeField] StoreStatistics statistics;
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
@@ -37,6 +40,9 @@ public class StoreHud : MonoBehaviour
     int displayedRevenue = int.MinValue;
     int displayedExpense = int.MinValue;
     int displayedResultDay = int.MinValue;
+    int displayedVisitors = int.MinValue;
+    int displayedPurchasingCustomers = int.MinValue;
+    int displayedItemsSold = int.MinValue;
     bool hasWarned;
 
     void Awake()
@@ -168,9 +174,20 @@ public class StoreHud : MonoBehaviour
             return;
         }
 
+        int visitors = statistics != null ? statistics.VisitorCount : 0;
+        int purchasingCustomers = statistics != null ? statistics.PurchasingCustomerCount : 0;
+        int itemsSold = statistics != null ? statistics.ItemsSold : 0;
+        if (statistics == null)
+        {
+            WarnOnce("StoreHud: StoreStatistics가 연결되지 않아 판매 통계를 표시할 수 없습니다.");
+        }
+
         if (displayedResultDay == session.Day
             && displayedRevenue == economy.DailyRevenue
-            && displayedExpense == economy.DailyExpense)
+            && displayedExpense == economy.DailyExpense
+            && displayedVisitors == visitors
+            && displayedPurchasingCustomers == purchasingCustomers
+            && displayedItemsSold == itemsSold)
         {
             return;
         }
@@ -178,14 +195,77 @@ public class StoreHud : MonoBehaviour
         displayedResultDay = session.Day;
         displayedRevenue = economy.DailyRevenue;
         displayedExpense = economy.DailyExpense;
-        SetText(
-            resultText,
-            $"{session.DayLabel} 종료\n오늘 매출 {FormatWon(displayedRevenue)}\n매입 비용 {FormatWon(displayedExpense)}\n순이익 {FormatSignedWon(economy.NetProfit)}");
+        displayedVisitors = visitors;
+        displayedPurchasingCustomers = purchasingCustomers;
+        displayedItemsSold = itemsSold;
+        int averageTransaction = AverageTransactionValue(displayedRevenue, purchasingCustomers);
+        var builder = new StringBuilder();
+        builder.Append(session.DayLabel).Append(" 종료\n");
+        builder.Append("오늘 매출 ").Append(FormatWon(displayedRevenue)).Append('\n');
+        builder.Append("매입 비용 ").Append(FormatWon(displayedExpense)).Append('\n');
+        builder.Append("순이익 ").Append(FormatSignedWon(economy.NetProfit)).Append("\n\n");
+        builder.Append("방문 고객 ").Append(visitors.ToString(CultureInfo.InvariantCulture)).Append("명\n");
+        builder.Append("구매 고객 ").Append(purchasingCustomers.ToString(CultureInfo.InvariantCulture)).Append("명\n");
+        builder.Append("판매 상품 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture)).Append("개\n");
+        builder.Append("평균 객단가 ").Append(FormatWon(averageTransaction)).Append('\n');
+        builder.Append("구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append("\n\n");
+        builder.Append("상품별 판매");
+        if (statistics != null)
+        {
+            for (int index = 0; index < statistics.TrackedProductCount; index++)
+            {
+                if (!statistics.TryGetTrackedProductSales(index, out ProductDefinition product, out int soldQuantity, out int revenue))
+                {
+                    continue;
+                }
+
+                string productName = string.IsNullOrEmpty(product.DisplayName) ? product.name : product.DisplayName;
+                builder.Append('\n');
+                builder.Append(productName).Append(' ');
+                builder.Append(soldQuantity.ToString(CultureInfo.InvariantCulture)).Append("개 / ");
+                builder.Append(FormatWon(revenue));
+            }
+        }
+
+        SetText(resultText, builder.ToString());
+    }
+
+    static int AverageTransactionValue(int dailyRevenue, int purchasingCustomers)
+    {
+        if (purchasingCustomers <= 0)
+        {
+            return 0;
+        }
+
+        return (int)System.Math.Round(
+            dailyRevenue / (double)purchasingCustomers,
+            System.MidpointRounding.AwayFromZero);
+    }
+
+    static string FormatConversionRate(int purchasingCustomers, int visitors)
+    {
+        if (visitors <= 0)
+        {
+            return "0%";
+        }
+
+        long purchasing = purchasingCustomers;
+        long visitorCount = visitors;
+        if (purchasing * 100 % visitorCount == 0)
+        {
+            return (purchasing * 100 / visitorCount).ToString(CultureInfo.InvariantCulture) + "%";
+        }
+
+        double percent = System.Math.Round(
+            purchasing * 100d / visitorCount,
+            1,
+            System.MidpointRounding.AwayFromZero);
+        return percent.ToString("0.0", CultureInfo.InvariantCulture) + "%";
     }
 
     static string FormatWon(int amount)
     {
-        return "₩" + amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        return "₩" + amount.ToString("N0", CultureInfo.InvariantCulture);
     }
 
     static string FormatSignedWon(int amount)
@@ -302,6 +382,11 @@ public class StoreHud : MonoBehaviour
         if (economy == null)
         {
             Debug.LogWarning("StoreHud: StoreEconomy가 연결되지 않았습니다.", this);
+        }
+
+        if (statistics == null)
+        {
+            Debug.LogWarning("StoreHud: StoreStatistics가 연결되지 않았습니다.", this);
         }
 
         if (orderPanel == null)
