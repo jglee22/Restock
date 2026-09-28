@@ -8,6 +8,7 @@ public class CheckoutCounter : MonoBehaviour
 {
     [SerializeField] Transform[] queuePoints;
     [SerializeField] StoreEconomy economy;
+    [SerializeField] StoreStatistics statistics;
     [SerializeField] float checkoutDuration = 1.5f;
 
     readonly List<CustomerMover> queue = new List<CustomerMover>();
@@ -129,6 +130,14 @@ public class CheckoutCounter : MonoBehaviour
             CustomerBasketItem item = items[index];
             economy.RecordSale(item.Product, item.UnitPrice);
         }
+
+        if (statistics == null)
+        {
+            WarnOnce("CheckoutCounter: StoreStatistics가 연결되지 않아 구매 통계를 기록하지 못했습니다.");
+            return;
+        }
+
+        statistics.RecordCompletedPurchase(items);
     }
 
     void UpdateQueueTargets()

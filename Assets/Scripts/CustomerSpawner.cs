@@ -12,6 +12,7 @@ public class CustomerSpawner : MonoBehaviour
     [SerializeField] Shelf[] shoppingShelves;
     [SerializeField] CheckoutCounter checkout;
     [SerializeField] StorePricing storePricing;
+    [SerializeField] StoreStatistics storeStatistics;
     [SerializeField] float spawnInterval = 4f;
     [SerializeField] int maxActiveCustomers = 5;
     [SerializeField] float browseDuration = 1.2f;
@@ -77,6 +78,13 @@ public class CustomerSpawner : MonoBehaviour
 
         activeCustomerCount += 1;
         customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, checkout, storePricing);
+        if (storeStatistics == null)
+        {
+            WarnOnce("CustomerSpawner: StoreStatistics가 연결되지 않아 방문 고객을 기록하지 못했습니다.");
+            return;
+        }
+
+        storeStatistics.RecordCustomerVisit();
     }
 
     void WarnOnce(string message)
