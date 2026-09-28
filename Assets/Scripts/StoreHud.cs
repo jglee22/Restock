@@ -27,6 +27,7 @@ public class StoreHud : MonoBehaviour
     [SerializeField] GameObject speedControls;
     [SerializeField] GameObject resultPanel;
     [SerializeField] GameObject orderPanel;
+    [SerializeField] GameObject pricePanel;
 
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
@@ -118,6 +119,7 @@ public class StoreHud : MonoBehaviour
         SetObjectVisible(speedControls, session.Phase == StorePhase.Open);
         SetObjectVisible(resultPanel, session.Phase == StorePhase.Result);
         SetObjectVisible(orderPanel, session.Phase == StorePhase.Preparation);
+        SetObjectVisible(pricePanel, session.Phase == StorePhase.Preparation);
     }
 
     bool CanShowResult()
@@ -279,6 +281,11 @@ public class StoreHud : MonoBehaviour
         if (orderPanel == null)
         {
             Debug.LogWarning("StoreHud: OrderPanel이 연결되지 않았습니다.", this);
+        }
+
+        if (pricePanel == null)
+        {
+            Debug.LogWarning("StoreHud: PricePanel이 연결되지 않았습니다.", this);
         }
     }
 

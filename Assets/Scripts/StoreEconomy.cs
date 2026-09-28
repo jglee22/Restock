@@ -43,7 +43,7 @@ public class StoreEconomy : MonoBehaviour
         session.DayStarted -= HandleDayStarted;
     }
 
-    public void RecordSale(ProductDefinition product)
+    public void RecordSale(ProductDefinition product, int salePrice)
     {
         if (product == null)
         {
@@ -51,11 +51,18 @@ public class StoreEconomy : MonoBehaviour
             return;
         }
 
-        int salePrice = product.BaseSellPrice;
         if (salePrice < 0)
         {
             Debug.LogWarning(
-                $"StoreEconomy: Base Sell Price가 음수라 판매하지 않습니다. 상품: {product.DisplayName}, 가격: {salePrice}",
+                $"StoreEconomy: 판매 가격이 음수라 판매하지 않습니다. 상품: {product.DisplayName}, 가격: {salePrice}",
+                this);
+            return;
+        }
+
+        if (salePrice > 0 && (currentMoney > int.MaxValue - salePrice || dailyRevenue > int.MaxValue - salePrice))
+        {
+            Debug.LogWarning(
+                $"StoreEconomy: 판매 금액을 더하면 보유 자금 또는 매출이 표현 범위를 넘습니다. 상품: {product.DisplayName}, 가격: {salePrice}",
                 this);
             return;
         }

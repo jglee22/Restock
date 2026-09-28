@@ -11,6 +11,7 @@ public class CustomerSpawner : MonoBehaviour
     [SerializeField] Transform exitPoint;
     [SerializeField] Shelf[] shoppingShelves;
     [SerializeField] CheckoutCounter checkout;
+    [SerializeField] StorePricing storePricing;
     [SerializeField] float spawnInterval = 4f;
     [SerializeField] int maxActiveCustomers = 5;
     [SerializeField] float browseDuration = 1.2f;
@@ -69,8 +70,13 @@ public class CustomerSpawner : MonoBehaviour
             return;
         }
 
+        if (storePricing == null)
+        {
+            WarnOnce("CustomerSpawner: StorePricing이 연결되지 않았습니다.");
+        }
+
         activeCustomerCount += 1;
-        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, checkout);
+        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, checkout, storePricing);
     }
 
     void WarnOnce(string message)
