@@ -48,6 +48,7 @@ public class StoreHud : MonoBehaviour
     int displayedPurchasingCustomers = int.MinValue;
     int displayedItemsSold = int.MinValue;
     int displayedCheckoutWaitSamples = int.MinValue;
+    int displayedStockoutCount = int.MinValue;
     bool hasWarned;
 
     void Awake()
@@ -198,6 +199,7 @@ public class StoreHud : MonoBehaviour
         int purchasingCustomers = statistics != null ? statistics.PurchasingCustomerCount : 0;
         int itemsSold = statistics != null ? statistics.ItemsSold : 0;
         int checkoutWaitSamples = statistics != null ? statistics.CheckoutWaitSampleCount : 0;
+        int stockoutCount = statistics != null ? statistics.StockoutCount : 0;
         if (statistics == null)
         {
             WarnOnce("StoreHud: StoreStatistics가 연결되지 않아 판매 통계를 표시할 수 없습니다.");
@@ -209,7 +211,8 @@ public class StoreHud : MonoBehaviour
             && displayedVisitors == visitors
             && displayedPurchasingCustomers == purchasingCustomers
             && displayedItemsSold == itemsSold
-            && displayedCheckoutWaitSamples == checkoutWaitSamples)
+            && displayedCheckoutWaitSamples == checkoutWaitSamples
+            && displayedStockoutCount == stockoutCount)
         {
             return;
         }
@@ -221,6 +224,7 @@ public class StoreHud : MonoBehaviour
         displayedPurchasingCustomers = purchasingCustomers;
         displayedItemsSold = itemsSold;
         displayedCheckoutWaitSamples = checkoutWaitSamples;
+        displayedStockoutCount = stockoutCount;
         int averageTransaction = AverageTransactionValue(displayedRevenue, purchasingCustomers);
         float averageCheckoutWait = statistics != null ? statistics.AverageCheckoutWaitSeconds : 0f;
         var builder = new StringBuilder();
@@ -231,6 +235,7 @@ public class StoreHud : MonoBehaviour
         builder.Append("방문 고객 ").Append(visitors.ToString(CultureInfo.InvariantCulture)).Append("명\n");
         builder.Append("구매 고객 ").Append(purchasingCustomers.ToString(CultureInfo.InvariantCulture)).Append("명\n");
         builder.Append("판매 상품 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture)).Append("개\n");
+        builder.Append("품절 횟수 ").Append(stockoutCount.ToString(CultureInfo.InvariantCulture)).Append("회\n");
         builder.Append("평균 객단가 ").Append(FormatWon(averageTransaction)).Append('\n');
         builder.Append("평균 계산 대기 ").Append(FormatCheckoutWait(averageCheckoutWait)).Append('\n');
         builder.Append("구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append("\n\n");
