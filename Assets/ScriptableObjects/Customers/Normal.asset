@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6cda7b4d0ce0c9e43b90a5a36170abc7, type: 3}
+  m_Name: Normal
+  m_EditorClassIdentifier: Assembly-CSharp::CustomerDefinition
+  customerId: normal
+  displayName: "\uBCF4\uD1B5 \uC190\uB2D8"
+  budget: 6000
+  priceSensitivity: 1
+  minTargetItems: 1
+  maxTargetItems: 3
+  browseTimeModifier: 1

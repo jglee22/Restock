@@ -43,9 +43,9 @@ public class CustomerMover : MonoBehaviour
     Shelf[] shoppingShelves;
     CheckoutCounter checkout;
     StorePricing pricing;
+    CustomerDefinition customerDefinition;
+    int remainingBudget;
     float browseDuration;
-    [SerializeField] int minTargetItems = 1;
-    [SerializeField] int maxTargetItems = 3;
     readonly List<CustomerBasketItem> basket = new List<CustomerBasketItem>();
     readonly HashSet<ProductDefinition> attemptedProducts = new HashSet<ProductDefinition>();
     int targetItemCount;
@@ -63,6 +63,10 @@ public class CustomerMover : MonoBehaviour
 
     public int BasketCount => basket.Count;
 
+    public CustomerDefinition Definition => customerDefinition;
+
+    public int RemainingBudget => remainingBudget;
+
     public void Begin(
         CustomerSpawner owner,
         Transform inside,
@@ -70,15 +74,18 @@ public class CustomerMover : MonoBehaviour
         Shelf[] shelves,
         float browse,
         CheckoutCounter checkoutCounter,
-        StorePricing storePricing)
+        StorePricing storePricing,
+        CustomerDefinition definition)
     {
         spawner = owner;
         insidePoint = inside;
         exitPoint = exit;
         shoppingShelves = shelves;
-        browseDuration = browse;
         checkout = checkoutCounter;
         pricing = storePricing;
+        customerDefinition = definition;
+        remainingBudget = definition.Budget;
+        browseDuration = browse * definition.BrowseTimeModifier;
         basket.Clear();
         attemptedProducts.Clear();
         targetItemCount = NextTargetItemCount();
@@ -205,6 +212,8 @@ public class CustomerMover : MonoBehaviour
                     if (WantsToBuy(browsedProduct, out int unitPrice) && chosenShelf.TryTakeOne() && !BasketContains(browsedProduct))
                     {
                         basket.Add(new CustomerBasketItem(browsedProduct, unitPrice));
+                        // 구매 확률을 통과한 시점이 아니라, 진열에서 꺼내 바구니에 넣은 뒤에만 예산을 쓴다.
+                        remainingBudget -= unitPrice;
                     }
                 }
 
@@ -293,8 +302,8 @@ public class CustomerMover : MonoBehaviour
 
     int NextTargetItemCount()
     {
-        int minimum = Mathf.Max(1, minTargetItems);
-        int maximum = Mathf.Max(minimum, maxTargetItems);
+        int minimum = customerDefinition.MinTargetItems;
+        int maximum = customerDefinition.MaxTargetItems;
         if (maximum == int.MaxValue)
         {
             return maximum;
@@ -347,11 +356,20 @@ public class CustomerMover : MonoBehaviour
             return false;
         }
 
-        float chance = CalculatePurchaseChance(unitPrice, product.BaseSellPrice, product.Popularity);
+        if (unitPrice > remainingBudget)
+        {
+            return false;
+        }
+
+        float chance = CalculatePurchaseChance(
+            unitPrice,
+            product.BaseSellPrice,
+            product.Popularity,
+            customerDefinition.PriceSensitivity);
         return Random.value < chance;
     }
 
-    static float CalculatePurchaseChance(int currentPrice, int basePrice, float popularity)
+    static float CalculatePurchaseChance(int currentPrice, int basePrice, float popularity, float priceSensitivity)
     {
         float ratio = currentPrice / (float)basePrice;
         float chance;
@@ -361,6 +379,7 @@ public class CustomerMover : MonoBehaviour
         }
         else if (ratio >= RejectPurchasePriceRatio)
         {
+            // 기준가 2배 이상은 민감도와 상관없이 구매하지 않는다.
             chance = 0f;
         }
         else if (ratio <= 1f)
@@ -370,8 +389,10 @@ public class CustomerMover : MonoBehaviour
         }
         else
         {
+            // 기준가보다 비싼 구간에서만 민감도가 거절 속도를 바꾼다.
             float t = (ratio - 1f) / (RejectPurchasePriceRatio - 1f);
-            chance = Mathf.Lerp(popularity, 0f, t);
+            float sensitiveT = Mathf.Clamp01(t * priceSensitivity);
+            chance = Mathf.Lerp(popularity, 0f, sensitiveT);
         }
 
         return Mathf.Clamp01(chance);
@@ -598,19 +619,6 @@ public class CustomerMover : MonoBehaviour
 
         visitCompleted = true;
         spawner.NotifyDeparted();
-    }
-
-    void OnValidate()
-    {
-        if (minTargetItems < 1)
-        {
-            Debug.LogWarning($"CustomerMover: Min Target Items는 1 이상이어야 합니다. 현재 값: {minTargetItems}", this);
-        }
-
-        if (maxTargetItems < minTargetItems)
-        {
-            Debug.LogWarning($"CustomerMover: Max Target Items는 Min Target Items 이상이어야 합니다. 현재 값: {maxTargetItems}", this);
-        }
     }
 
     void WarnOnce(string message)
