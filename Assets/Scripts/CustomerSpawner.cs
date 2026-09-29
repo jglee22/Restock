@@ -13,6 +13,7 @@ public class CustomerSpawner : MonoBehaviour
     [SerializeField] CheckoutCounter checkout;
     [SerializeField] StorePricing storePricing;
     [SerializeField] StoreStatistics storeStatistics;
+    [SerializeField] CustomerDefinition[] customerDefinitions;
     [SerializeField] float spawnInterval = 4f;
     [SerializeField] int maxActiveCustomers = 5;
     [SerializeField] float browseDuration = 1.2f;
@@ -59,6 +60,11 @@ public class CustomerSpawner : MonoBehaviour
             return;
         }
 
+        if (!TryChooseCustomerDefinition(out CustomerDefinition definition))
+        {
+            return;
+        }
+
         UnityEngine.AI.NavMeshAgent prefabAgent = customerPrefab.GetComponent<UnityEngine.AI.NavMeshAgent>();
         float baseOffset = prefabAgent != null ? prefabAgent.baseOffset : 0f;
         Vector3 pivot = spawnPoint.position + Vector3.up * baseOffset;
@@ -77,7 +83,7 @@ public class CustomerSpawner : MonoBehaviour
         }
 
         activeCustomerCount += 1;
-        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, checkout, storePricing);
+        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, checkout, storePricing, definition);
         if (storeStatistics == null)
         {
             WarnOnce("CustomerSpawner: StoreStatistics가 연결되지 않아 방문 고객을 기록하지 못했습니다.");
@@ -85,6 +91,51 @@ public class CustomerSpawner : MonoBehaviour
         }
 
         storeStatistics.RecordCustomerVisit();
+    }
+
+    bool TryChooseCustomerDefinition(out CustomerDefinition definition)
+    {
+        definition = null;
+        if (customerDefinitions == null || customerDefinitions.Length == 0)
+        {
+            WarnOnce("CustomerSpawner: 고객 유형이 연결되지 않아 고객을 만들지 않습니다.");
+            return false;
+        }
+
+        int index = Random.Range(0, customerDefinitions.Length);
+        CustomerDefinition candidate = customerDefinitions[index];
+        if (candidate == null || !candidate.CanSpawn())
+        {
+            WarnOnce("CustomerSpawner: 고객 유형이 비어 있거나 값이 올바르지 않아 고객을 만들지 않습니다.");
+            return false;
+        }
+
+        definition = candidate;
+        return true;
+    }
+
+    void OnValidate()
+    {
+        if (customerDefinitions == null || customerDefinitions.Length == 0)
+        {
+            Debug.LogWarning("CustomerSpawner: 고객 유형이 연결되지 않았습니다.", this);
+            return;
+        }
+
+        for (int index = 0; index < customerDefinitions.Length; index++)
+        {
+            CustomerDefinition definition = customerDefinitions[index];
+            if (definition == null)
+            {
+                Debug.LogWarning($"CustomerSpawner: 고객 유형 {index}가 비어 있습니다.", this);
+                continue;
+            }
+
+            if (!definition.CanSpawn())
+            {
+                Debug.LogWarning($"CustomerSpawner: {definition.name} 고객 유형의 값이 올바르지 않아 스폰에 사용하지 않습니다.", this);
+            }
+        }
     }
 
     void WarnOnce(string message)
