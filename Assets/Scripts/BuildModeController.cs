@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using Unity.AI.Navigation;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -30,7 +32,9 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] StoreSession session;
     [SerializeField] StoreEconomy economy;
     [SerializeField] StoreInventory storeInventory;
+    [SerializeField] StoreStatistics storeStatistics;
     [SerializeField] CustomerSpawner customerSpawner;
+    [SerializeField] NavMeshSurface navMeshSurface;
     [SerializeField] Camera viewCamera;
     [SerializeField] Collider buildSurface;
     [SerializeField] FacilityDefinition[] facilities;
@@ -70,6 +74,7 @@ public class BuildModeController : MonoBehaviour
     bool buildModeActive;
     bool previewValid;
     bool hasGrid;
+    bool navMeshRefreshPending;
     float originX;
     float originZ;
     float floorTop;
@@ -149,6 +154,10 @@ public class BuildModeController : MonoBehaviour
             Debug.LogWarning("BuildModeController: StoreInventory가 연결되지 않았습니다.", this);
         if (customerSpawner == null)
             Debug.LogWarning("BuildModeController: CustomerSpawner가 연결되지 않았습니다.", this);
+        if (storeStatistics == null)
+            Debug.LogWarning("BuildModeController: StoreStatistics가 연결되지 않았습니다.", this);
+        if (navMeshSurface == null)
+            Debug.LogWarning("BuildModeController: NavMeshSurface가 연결되지 않았습니다.", this);
     }
 
     void Update()
@@ -319,6 +328,7 @@ public class BuildModeController : MonoBehaviour
             return;
 
         SpawnPlacedFacility(selected, currentOrigin, rotationQuarterTurns);
+        RequestNavMeshRefresh();
     }
 
     bool CanAffordPlacement()
@@ -431,6 +441,7 @@ public class BuildModeController : MonoBehaviour
             SpawnPlacedFacility(definition, new Vector2Int(record.gridX, record.gridY), record.rotationQuarterTurns);
         }
 
+        RequestNavMeshRefresh();
         return true;
     }
 
@@ -453,6 +464,15 @@ public class BuildModeController : MonoBehaviour
 
     void RegisterFacilityRuntimeDependencies(PlacedFacility placed)
     {
+        if (placed == null || placed.Definition == null)
+            return;
+
+        if (placed.Definition.FacilityType == FacilityType.Checkout)
+        {
+            RegisterCheckoutFacility(placed);
+            return;
+        }
+
         if (!TryGetShoppingShelf(placed, out Shelf shelf))
             return;
 
@@ -474,10 +494,92 @@ public class BuildModeController : MonoBehaviour
 
     void UnregisterFacilityRuntimeDependencies(PlacedFacility placed)
     {
+        if (placed == null || placed.Definition == null)
+            return;
+
+        if (placed.Definition.FacilityType == FacilityType.Checkout)
+        {
+            UnregisterCheckoutFacility(placed);
+            return;
+        }
+
         if (!TryGetShoppingShelf(placed, out Shelf shelf) || customerSpawner == null)
             return;
 
         customerSpawner.UnregisterShoppingShelf(shelf);
+    }
+
+    void RegisterCheckoutFacility(PlacedFacility placed)
+    {
+        CheckoutCounter counter = placed.GetComponent<CheckoutCounter>();
+        if (counter == null)
+        {
+            Debug.LogWarning($"BuildModeController: {placed.Definition.FacilityId}에 CheckoutCounter가 없습니다.", placed);
+            return;
+        }
+
+        if (economy == null || storeStatistics == null)
+        {
+            Debug.LogWarning("BuildModeController: StoreEconomy 또는 StoreStatistics가 없어 계산대를 연결하지 못했습니다.", this);
+            return;
+        }
+
+        if (!counter.BindStoreServices(economy, storeStatistics))
+            return;
+
+        if (customerSpawner == null)
+        {
+            Debug.LogWarning("BuildModeController: CustomerSpawner가 없어 계산대를 등록하지 못했습니다.", this);
+            return;
+        }
+
+        customerSpawner.RegisterCheckout(counter);
+    }
+
+    void UnregisterCheckoutFacility(PlacedFacility placed)
+    {
+        CheckoutCounter counter = placed.GetComponent<CheckoutCounter>();
+        if (counter == null)
+        {
+            Debug.LogWarning($"BuildModeController: {placed.Definition.FacilityId}에 CheckoutCounter가 없어 등록을 해제하지 못했습니다.", placed);
+            return;
+        }
+
+        if (customerSpawner == null)
+        {
+            Debug.LogWarning("BuildModeController: CustomerSpawner가 없어 계산대 등록을 해제하지 못했습니다.", this);
+            return;
+        }
+
+        customerSpawner.UnregisterCheckout(counter);
+    }
+
+    void RequestNavMeshRefresh()
+    {
+        if (navMeshSurface == null)
+        {
+            Debug.LogWarning("BuildModeController: NavMeshSurface가 없어 NavMesh를 갱신하지 못했습니다.", this);
+            return;
+        }
+
+        if (navMeshRefreshPending)
+            return;
+
+        navMeshRefreshPending = true;
+        StartCoroutine(RefreshNavMeshNextFrame());
+    }
+
+    IEnumerator RefreshNavMeshNextFrame()
+    {
+        yield return null;
+        navMeshRefreshPending = false;
+        if (navMeshSurface == null)
+        {
+            Debug.LogWarning("BuildModeController: NavMeshSurface가 없어 NavMesh를 갱신하지 못했습니다.", this);
+            yield break;
+        }
+
+        navMeshSurface.BuildNavMesh();
     }
 
     static bool TryGetShoppingShelf(PlacedFacility placed, out Shelf shelf)
@@ -624,6 +726,7 @@ public class BuildModeController : MonoBehaviour
         placedFacilities.Remove(placed);
         Release(origin, footprint);
         Destroy(placed.gameObject);
+        RequestNavMeshRefresh();
         if (cost < 0)
             return;
 
@@ -710,6 +813,7 @@ public class BuildModeController : MonoBehaviour
         rotationQuarterTurns = 0;
         DestroyPreview();
         toolMode = BuildToolMode.MoveSelect;
+        RequestNavMeshRefresh();
     }
 
     void CancelMove()

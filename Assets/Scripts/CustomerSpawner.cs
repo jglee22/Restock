@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Open 동안만 고객을 만들고, 퇴장하면 수를 줄인다.
@@ -21,8 +22,89 @@ public class CustomerSpawner : MonoBehaviour
     int activeCustomerCount;
     float spawnTimer;
     bool hasWarned;
+    readonly List<CheckoutCounter> availableCheckouts = new List<CheckoutCounter>();
+    int nextCheckoutIndex;
 
     public int ActiveCustomerCount => activeCustomerCount;
+
+    void Awake()
+    {
+        RegisterCheckout(checkout);
+    }
+
+    public void RegisterCheckout(CheckoutCounter checkoutCounter)
+    {
+        if (checkoutCounter == null || availableCheckouts.Contains(checkoutCounter))
+        {
+            return;
+        }
+
+        availableCheckouts.Add(checkoutCounter);
+    }
+
+    public void UnregisterCheckout(CheckoutCounter checkoutCounter)
+    {
+        if (checkoutCounter == null)
+        {
+            return;
+        }
+
+        int index = availableCheckouts.IndexOf(checkoutCounter);
+        if (index < 0)
+        {
+            return;
+        }
+
+        availableCheckouts.RemoveAt(index);
+        if (availableCheckouts.Count == 0)
+        {
+            nextCheckoutIndex = 0;
+            return;
+        }
+
+        if (nextCheckoutIndex > index)
+        {
+            nextCheckoutIndex -= 1;
+        }
+
+        if (nextCheckoutIndex >= availableCheckouts.Count)
+        {
+            nextCheckoutIndex = 0;
+        }
+    }
+
+    CheckoutCounter SelectCheckout()
+    {
+        int count = availableCheckouts.Count;
+        if (count == 0)
+        {
+            WarnOnce("CustomerSpawner: 사용할 수 있는 계산대가 없습니다.");
+            return null;
+        }
+
+        for (int attempt = 0; attempt < count; attempt++)
+        {
+            if (nextCheckoutIndex >= availableCheckouts.Count)
+            {
+                nextCheckoutIndex = 0;
+            }
+
+            CheckoutCounter candidate = availableCheckouts[nextCheckoutIndex];
+            nextCheckoutIndex += 1;
+            if (nextCheckoutIndex >= availableCheckouts.Count)
+            {
+                nextCheckoutIndex = 0;
+            }
+
+            if (candidate != null && candidate.isActiveAndEnabled)
+            {
+                return candidate;
+            }
+        }
+
+        WarnOnce("CustomerSpawner: 사용할 수 있는 계산대가 없습니다.");
+        return null;
+    }
 
     public void RegisterShoppingShelf(Shelf shelf)
     {
@@ -156,13 +238,20 @@ public class CustomerSpawner : MonoBehaviour
             return;
         }
 
+        CheckoutCounter selectedCheckout = SelectCheckout();
+        if (selectedCheckout == null)
+        {
+            Destroy(customer.gameObject);
+            return;
+        }
+
         if (storePricing == null)
         {
             WarnOnce("CustomerSpawner: StorePricing이 연결되지 않았습니다.");
         }
 
         activeCustomerCount += 1;
-        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, checkout, storePricing, definition);
+        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, selectedCheckout, storePricing, definition);
         if (storeStatistics == null)
         {
             WarnOnce("CustomerSpawner: StoreStatistics가 연결되지 않아 방문 고객을 기록하지 못했습니다.");
