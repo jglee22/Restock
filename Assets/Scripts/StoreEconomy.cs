@@ -89,6 +89,46 @@ public class StoreEconomy : MonoBehaviour
         return true;
     }
 
+    public bool CanAffordFacility(int amount)
+    {
+        return amount >= 0 && currentMoney >= amount;
+    }
+
+    public bool TrySpendFacility(int amount)
+    {
+        if (amount < 0)
+        {
+            Debug.LogWarning($"StoreEconomy: 시설 비용은 0 이상이어야 합니다. 요청 금액: {amount}", this);
+            return false;
+        }
+
+        if (currentMoney < amount)
+        {
+            return false;
+        }
+
+        currentMoney -= amount;
+        return true;
+    }
+
+    public bool AddFacilityRefund(int amount)
+    {
+        if (amount < 0)
+        {
+            Debug.LogWarning($"StoreEconomy: 시설 환불은 0 이상이어야 합니다. 요청 금액: {amount}", this);
+            return false;
+        }
+
+        if (amount > 0 && currentMoney > int.MaxValue - amount)
+        {
+            Debug.LogWarning($"StoreEconomy: 시설 환불을 더하면 보유 자금이 표현 범위를 넘습니다. 환불: {amount}", this);
+            return false;
+        }
+
+        currentMoney += amount;
+        return true;
+    }
+
     public bool TryRestoreState(int money, int revenue, int expense)
     {
         if (money < 0 || revenue < 0 || expense < 0)
