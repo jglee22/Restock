@@ -37,6 +37,7 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] StoreInventory storeInventory;
     [SerializeField] StoreStatistics storeStatistics;
     [SerializeField] CustomerSpawner customerSpawner;
+    [SerializeField] StoreEventSystem eventSystem;
     [SerializeField] NavMeshSurface navMeshSurface;
     [SerializeField] Camera viewCamera;
     [SerializeField] Collider buildSurface;
@@ -607,6 +608,15 @@ public class BuildModeController : MonoBehaviour
 
         if (!counter.BindStoreServices(economy, storeStatistics))
             return;
+
+        if (eventSystem == null)
+        {
+            Debug.LogWarning("BuildModeController: StoreEventSystem이 없어 계산대에 이벤트를 연결하지 못했습니다.", this);
+        }
+        else
+        {
+            counter.BindEventSystem(eventSystem);
+        }
 
         if (customerSpawner == null)
         {
