@@ -15,6 +15,8 @@ public class CheckoutCounter : MonoBehaviour
     readonly Dictionary<CustomerMover, float> queueEnterTimes = new Dictionary<CustomerMover, float>();
     bool checkoutInProgress;
 
+    public IReadOnlyList<Transform> QueuePoints => queuePoints;
+
     public bool BindStoreServices(StoreEconomy storeEconomy, StoreStatistics storeStatistics)
     {
         if (storeEconomy == null || storeStatistics == null)

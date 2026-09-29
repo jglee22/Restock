@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.AI.Navigation;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -54,6 +55,9 @@ public class BuildModeController : MonoBehaviour
 
     Transform placedRoot;
     readonly List<PlacedFacility> placedFacilities = new List<PlacedFacility>();
+    readonly List<Vector3> accessScratch = new List<Vector3>(8);
+    float cachedAgentRadius = -1f;
+    bool warnedAccessSetup;
     GameObject preview;
     UnityEngine.Events.UnityAction selectShelf;
     UnityEngine.Events.UnityAction selectRefrigerator;
@@ -308,9 +312,10 @@ public class BuildModeController : MonoBehaviour
         Vector3 center = FootprintCenter(currentOrigin, footprint);
         PlaceOnFloor(preview, center);
         bool spatialValid = IsSpatiallyValid(currentOrigin, footprint, center);
+        bool layoutValid = spatialValid && IsAccessClear(center, footprint);
         previewValid = toolMode == BuildToolMode.Moving
-            ? spatialValid
-            : spatialValid && CanAffordPlacement();
+            ? layoutValid
+            : layoutValid && CanAffordPlacement();
         ApplyTint(previewValid ? ValidTint : InvalidTint);
     }
 
@@ -321,7 +326,7 @@ public class BuildModeController : MonoBehaviour
 
         Vector2Int footprint = CurrentFootprintSize;
         Vector3 center = FootprintCenter(currentOrigin, footprint);
-        if (!IsSpatiallyValid(currentOrigin, footprint, center))
+        if (!IsSpatiallyValid(currentOrigin, footprint, center) || !IsAccessClear(center, footprint))
             return;
 
         if (economy == null || !economy.TrySpendFacility(selected.Cost))
@@ -421,6 +426,9 @@ public class BuildModeController : MonoBehaviour
                 return false;
             }
         }
+
+        if (!SavedAccessClear(records, out error))
+            return false;
 
         return true;
     }
@@ -795,6 +803,10 @@ public class BuildModeController : MonoBehaviour
             return;
 
         Vector2Int footprint = CurrentFootprintSize;
+        Vector3 center = FootprintCenter(currentOrigin, footprint);
+        if (!IsSpatiallyValid(currentOrigin, footprint, center) || !IsAccessClear(center, footprint))
+            return;
+
         Vector3 position = preview.transform.position;
         Quaternion rotation = preview.transform.rotation;
         Vector2Int origin = currentOrigin;
@@ -914,13 +926,336 @@ public class BuildModeController : MonoBehaviour
         return false;
     }
 
-    bool OverlapsExisting(Vector3 center, Vector2Int size)
+    bool IsAccessClear(Vector3 center, Vector2Int footprint)
     {
-        Vector3 boxCenter = center + Vector3.up * OverlapCenterHeight;
-        Vector3 halfExtents = new Vector3(
+        float radius = AccessClearance();
+        if (radius < 0f)
+            return false;
+
+        return ExistingPointsClearOfFootprint(center, footprint, radius, false)
+            && PreviewPointsClear(radius);
+    }
+
+    bool SavedAccessClear(List<StorePersistence.DynamicFacilitySaveData> records, out string error)
+    {
+        error = string.Empty;
+        float radius = AccessClearance();
+        if (radius < 0f)
+        {
+            error = "NavMesh Agent Radius를 확인하지 못했습니다.";
+            return false;
+        }
+
+        for (int index = 0; index < records.Count; index++)
+        {
+            StorePersistence.DynamicFacilitySaveData record = records[index];
+            if (!TryDescribeDynamicRecord(record, out FacilityDefinition definition, out Vector2Int origin, out Vector2Int footprint, out error))
+                return false;
+
+            Vector3 center = FootprintCenter(origin, footprint);
+            if (!ExistingPointsClearOfFootprint(center, footprint, radius, true))
+            {
+                error = $"{definition.FacilityId} ({origin.x}, {origin.y})가 기존 고객 접근 지점을 막습니다.";
+                return false;
+            }
+
+            if (!TryFillSavedAccess(definition, origin, footprint, record.rotationQuarterTurns))
+            {
+                error = $"{definition.FacilityId} ({origin.x}, {origin.y})의 고객 접근 지점을 확인하지 못했습니다.";
+                return false;
+            }
+
+            for (int pointIndex = 0; pointIndex < accessScratch.Count; pointIndex++)
+            {
+                if (AccessPointBlocked(accessScratch[pointIndex], radius, true))
+                {
+                    error = $"{definition.FacilityId} ({origin.x}, {origin.y})의 고객 접근 지점이 기존 시설이나 벽에 막힙니다.";
+                    return false;
+                }
+            }
+        }
+
+        for (int left = 0; left < records.Count; left++)
+        {
+            if (!TryDescribeDynamicRecord(records[left], out FacilityDefinition leftDefinition, out Vector2Int leftOrigin, out Vector2Int leftFootprint, out error))
+                return false;
+
+            Vector3 leftCenter = FootprintCenter(leftOrigin, leftFootprint);
+            for (int right = 0; right < records.Count; right++)
+            {
+                if (left == right)
+                    continue;
+
+                if (!TryDescribeDynamicRecord(records[right], out FacilityDefinition rightDefinition, out Vector2Int rightOrigin, out Vector2Int rightFootprint, out error))
+                    return false;
+
+                if (!TryFillSavedAccess(rightDefinition, rightOrigin, rightFootprint, records[right].rotationQuarterTurns))
+                {
+                    error = $"{rightDefinition.FacilityId} ({rightOrigin.x}, {rightOrigin.y})의 고객 접근 지점을 확인하지 못했습니다.";
+                    return false;
+                }
+
+                for (int pointIndex = 0; pointIndex < accessScratch.Count; pointIndex++)
+                {
+                    if (!ClearsFootprint(accessScratch[pointIndex], leftCenter, leftFootprint, radius))
+                    {
+                        error = $"{leftDefinition.FacilityId} ({leftOrigin.x}, {leftOrigin.y})가 {rightDefinition.FacilityId}의 고객 접근 지점을 막습니다.";
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    bool ExistingPointsClearOfFootprint(Vector3 center, Vector2Int footprint, float radius, bool ignoreDynamic)
+    {
+        if (customerSpawner == null)
+        {
+            WarnAccessSetup("BuildModeController: CustomerSpawner가 없어 고객 접근 지점을 확인하지 못했습니다.");
+            return false;
+        }
+
+        IReadOnlyList<Shelf> shelves = customerSpawner.ShoppingShelves;
+        if (shelves != null)
+        {
+            for (int index = 0; index < shelves.Count; index++)
+            {
+                Shelf shelf = shelves[index];
+                if (shelf == null || SkipAccessOwner(shelf, ignoreDynamic))
+                    continue;
+
+                Transform standPoint = shelf.CustomerStandPoint;
+                if (standPoint == null)
+                {
+                    WarnAccessSetup("BuildModeController: CustomerStandPoint가 없는 진열대가 있습니다.");
+                    return false;
+                }
+
+                if (!ClearsFootprint(standPoint.position, center, footprint, radius))
+                    return false;
+            }
+        }
+
+        IReadOnlyList<CheckoutCounter> checkouts = customerSpawner.AvailableCheckouts;
+        if (checkouts == null)
+            return true;
+
+        for (int index = 0; index < checkouts.Count; index++)
+        {
+            CheckoutCounter counter = checkouts[index];
+            if (counter == null || SkipAccessOwner(counter, ignoreDynamic))
+                continue;
+
+            IReadOnlyList<Transform> points = counter.QueuePoints;
+            if (points == null || points.Count == 0)
+            {
+                WarnAccessSetup("BuildModeController: Queue Point가 없는 계산대가 있습니다.");
+                return false;
+            }
+
+            for (int pointIndex = 0; pointIndex < points.Count; pointIndex++)
+            {
+                Transform point = points[pointIndex];
+                if (point == null)
+                {
+                    WarnAccessSetup("BuildModeController: 비어 있는 Queue Point가 있습니다.");
+                    return false;
+                }
+
+                if (!ClearsFootprint(point.position, center, footprint, radius))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool PreviewPointsClear(float radius)
+    {
+        if (preview == null || selected == null)
+            return false;
+
+        if (selected.FacilityType == FacilityType.Checkout)
+        {
+            CheckoutCounter counter = preview.GetComponent<CheckoutCounter>();
+            IReadOnlyList<Transform> points = counter == null ? null : counter.QueuePoints;
+            if (counter == null || points == null || points.Count == 0)
+            {
+                WarnAccessSetup("BuildModeController: 배치할 계산대에 Queue Point가 없습니다.");
+                return false;
+            }
+
+            for (int index = 0; index < points.Count; index++)
+            {
+                if (points[index] == null)
+                {
+                    WarnAccessSetup("BuildModeController: 배치할 계산대의 Queue Point가 비어 있습니다.");
+                    return false;
+                }
+
+                if (AccessPointBlocked(points[index].position, radius, false))
+                    return false;
+            }
+
+            return true;
+        }
+
+        Shelf shelf = preview.GetComponent<Shelf>();
+        if (shelf == null || shelf.CustomerStandPoint == null)
+        {
+            WarnAccessSetup("BuildModeController: 배치할 진열대에 CustomerStandPoint가 없습니다.");
+            return false;
+        }
+
+        return !AccessPointBlocked(shelf.CustomerStandPoint.position, radius, false);
+    }
+
+    bool TryFillSavedAccess(FacilityDefinition definition, Vector2Int origin, Vector2Int footprint, int quarterTurns)
+    {
+        accessScratch.Clear();
+        if (definition == null || definition.Prefab == null)
+            return false;
+
+        GameObject prefab = definition.Prefab;
+        Quaternion rotation = prefab.transform.rotation * Quaternion.Euler(0f, PlacedFacility.NormalizeQuarterTurns(quarterTurns) * 90f, 0f);
+        Vector3 center = FootprintCenter(origin, footprint);
+        if (definition.FacilityType == FacilityType.Checkout)
+        {
+            CheckoutCounter counter = prefab.GetComponent<CheckoutCounter>();
+            IReadOnlyList<Transform> points = counter == null ? null : counter.QueuePoints;
+            if (counter == null || points == null || points.Count == 0)
+            {
+                WarnAccessSetup("BuildModeController: 저장할 계산대에 Queue Point가 없습니다.");
+                return false;
+            }
+
+            for (int index = 0; index < points.Count; index++)
+            {
+                if (points[index] == null)
+                {
+                    WarnAccessSetup("BuildModeController: 저장할 계산대의 Queue Point가 비어 있습니다.");
+                    return false;
+                }
+
+                accessScratch.Add(SavedAccessWorld(prefab, rotation, center, points[index]));
+            }
+
+            return true;
+        }
+
+        Shelf shelf = prefab.GetComponent<Shelf>();
+        if (shelf == null || shelf.CustomerStandPoint == null)
+        {
+            WarnAccessSetup("BuildModeController: 저장할 진열대에 CustomerStandPoint가 없습니다.");
+            return false;
+        }
+
+        accessScratch.Add(SavedAccessWorld(prefab, rotation, center, shelf.CustomerStandPoint));
+        return true;
+    }
+
+    static Vector3 SavedAccessWorld(GameObject prefab, Quaternion rotation, Vector3 center, Transform point)
+    {
+        Vector3 local = prefab.transform.InverseTransformPoint(point.position);
+        Vector3 offset = rotation * Vector3.Scale(local, prefab.transform.localScale);
+        return new Vector3(center.x + offset.x, center.y, center.z + offset.z);
+    }
+
+    bool AccessPointBlocked(Vector3 point, float radius, bool ignoreDynamic)
+    {
+        float horizontal = Mathf.Max(0f, radius - OverlapPadding);
+        Vector3 boxCenter = new Vector3(point.x, floorTop + OverlapCenterHeight, point.z);
+        Vector3 halfExtents = new Vector3(horizontal, OverlapHalfHeight, horizontal);
+        int count = Physics.OverlapBoxNonAlloc(
+            boxCenter,
+            halfExtents,
+            overlapHits,
+            Quaternion.identity,
+            Physics.DefaultRaycastLayers,
+            QueryTriggerInteraction.Ignore);
+
+        for (int index = 0; index < count; index++)
+        {
+            Collider hit = overlapHits[index];
+            if (hit == null || hit == buildSurface)
+                continue;
+            if (preview != null && hit.transform.IsChildOf(preview.transform))
+                continue;
+            if (movingFacility != null && hit.transform.IsChildOf(movingFacility.transform))
+                continue;
+            if (ignoreDynamic && hit.GetComponentInParent<PlacedFacility>() != null)
+                continue;
+            return true;
+        }
+
+        return false;
+    }
+
+    bool ClearsFootprint(Vector3 point, Vector3 center, Vector2Int footprint, float radius)
+    {
+        Vector3 halfExtents = FootprintHalfExtents(footprint);
+        float left = center.x - halfExtents.x;
+        float right = center.x + halfExtents.x;
+        float bottom = center.z - halfExtents.z;
+        float top = center.z + halfExtents.z;
+        float dx = Mathf.Max(left - point.x, Mathf.Max(0f, point.x - right));
+        float dz = Mathf.Max(bottom - point.z, Mathf.Max(0f, point.z - top));
+        return dx * dx + dz * dz >= radius * radius;
+    }
+
+    bool SkipAccessOwner(Component owner, bool ignoreDynamic)
+    {
+        if (movingFacility != null && owner.transform.IsChildOf(movingFacility.transform))
+            return true;
+
+        return ignoreDynamic && owner.GetComponent<PlacedFacility>() != null;
+    }
+
+    float AccessClearance()
+    {
+        if (cachedAgentRadius >= 0f)
+            return cachedAgentRadius;
+
+        if (navMeshSurface == null)
+        {
+            WarnAccessSetup("BuildModeController: NavMeshSurface가 없어 고객 접근 간격을 확인하지 못했습니다.");
+            return -1f;
+        }
+
+        NavMeshBuildSettings settings = NavMesh.GetSettingsByID(navMeshSurface.agentTypeID);
+        if (settings.agentTypeID == -1)
+        {
+            WarnAccessSetup("BuildModeController: NavMesh Agent 설정을 찾지 못했습니다.");
+            return -1f;
+        }
+
+        cachedAgentRadius = settings.agentRadius;
+        return cachedAgentRadius;
+    }
+
+    void WarnAccessSetup(string message)
+    {
+        if (warnedAccessSetup)
+            return;
+
+        warnedAccessSetup = true;
+        Debug.LogWarning(message, this);
+    }
+
+    Vector3 FootprintHalfExtents(Vector2Int size)
+    {
+        return new Vector3(
             size.x * cellSize * 0.5f - OverlapPadding,
             OverlapHalfHeight,
             size.y * cellSize * 0.5f - OverlapPadding);
+    }
+
+    bool OverlapsExisting(Vector3 center, Vector2Int size)
+    {
+        Vector3 boxCenter = center + Vector3.up * OverlapCenterHeight;
+        Vector3 halfExtents = FootprintHalfExtents(size);
         int count = Physics.OverlapBoxNonAlloc(
             boxCenter,
             halfExtents,
@@ -945,10 +1280,7 @@ public class BuildModeController : MonoBehaviour
     bool OverlapsStaticCollider(Vector3 center, Vector2Int size)
     {
         Vector3 boxCenter = center + Vector3.up * OverlapCenterHeight;
-        Vector3 halfExtents = new Vector3(
-            size.x * cellSize * 0.5f - OverlapPadding,
-            OverlapHalfHeight,
-            size.y * cellSize * 0.5f - OverlapPadding);
+        Vector3 halfExtents = FootprintHalfExtents(size);
         int count = Physics.OverlapBoxNonAlloc(
             boxCenter,
             halfExtents,
