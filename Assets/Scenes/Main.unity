@@ -4738,6 +4738,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildModeController
   cellSize: 1
   session: {fileID: 876268976}
+  economy: {fileID: 934487145}
   viewCamera: {fileID: 300003}
   buildSurface: {fileID: 110005}
   facilities:

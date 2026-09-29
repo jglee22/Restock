@@ -28,6 +28,7 @@ public class BuildModeController : MonoBehaviour
 
     [SerializeField] float cellSize = DefaultCellSize;
     [SerializeField] StoreSession session;
+    [SerializeField] StoreEconomy economy;
     [SerializeField] Camera viewCamera;
     [SerializeField] Collider buildSurface;
     [SerializeField] FacilityDefinition[] facilities;
@@ -136,6 +137,12 @@ public class BuildModeController : MonoBehaviour
             deleteButton.onClick.RemoveListener(selectDelete);
         if (exitButton != null)
             exitButton.onClick.RemoveListener(ExitBuildMode);
+    }
+
+    void OnValidate()
+    {
+        if (economy == null)
+            Debug.LogWarning("BuildModeController: StoreEconomy가 연결되지 않았습니다.", this);
     }
 
     void Update()
@@ -285,15 +292,39 @@ public class BuildModeController : MonoBehaviour
         currentOrigin = OriginFor(worldPoint, footprint);
         Vector3 center = FootprintCenter(currentOrigin, footprint);
         PlaceOnFloor(preview, center);
-        previewValid = IsInsideFloor(currentOrigin, footprint)
-            && !OverlapsBlockedCell(currentOrigin, footprint)
-            && !OverlapsExisting(center, footprint);
+        bool spatialValid = IsSpatiallyValid(currentOrigin, footprint, center);
+        previewValid = toolMode == BuildToolMode.Moving
+            ? spatialValid
+            : spatialValid && CanAffordPlacement();
         ApplyTint(previewValid ? ValidTint : InvalidTint);
     }
 
     void PlaceSelected()
     {
+        if (selected == null || selected.Prefab == null)
+            return;
+
+        Vector2Int footprint = CurrentFootprintSize;
+        Vector3 center = FootprintCenter(currentOrigin, footprint);
+        if (!IsSpatiallyValid(currentOrigin, footprint, center))
+            return;
+
+        if (economy == null || !economy.TrySpendFacility(selected.Cost))
+            return;
+
         SpawnPlacedFacility(selected, currentOrigin, rotationQuarterTurns);
+    }
+
+    bool CanAffordPlacement()
+    {
+        return selected != null && economy != null && economy.CanAffordFacility(selected.Cost);
+    }
+
+    bool IsSpatiallyValid(Vector2Int origin, Vector2Int footprint, Vector3 center)
+    {
+        return IsInsideFloor(origin, footprint)
+            && !OverlapsBlockedCell(origin, footprint)
+            && !OverlapsExisting(center, footprint);
     }
 
     public bool TryGetFacilityDefinition(string facilityId, out FacilityDefinition definition)
@@ -531,9 +562,20 @@ public class BuildModeController : MonoBehaviour
         if (!FootprintIsOccupied(origin, footprint))
             Debug.LogWarning("삭제할 시설의 점유 칸이 회전된 발자국과 일치하지 않습니다.");
 
+        int cost = placed.Definition.Cost;
         placedFacilities.Remove(placed);
         Release(origin, footprint);
         Destroy(placed.gameObject);
+        if (cost < 0)
+            return;
+
+        if (economy == null)
+        {
+            Debug.LogWarning("시설을 삭제했지만 StoreEconomy가 없어 환불하지 못했습니다.", this);
+            return;
+        }
+
+        economy.AddFacilityRefund(cost / 2);
     }
 
     bool TryGetPlacedFacilityUnderPointer(out PlacedFacility placed)
