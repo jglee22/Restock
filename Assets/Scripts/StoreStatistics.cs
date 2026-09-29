@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 하루 동안의 방문, 판매, 계산 대기 시간만 기록한다.
+// 하루 동안의 방문, 판매, 계산 대기 시간, 품절 횟수만 기록한다.
 // 보유 자금과 매출 금액은 StoreEconomy가 가진다.
 public class StoreStatistics : MonoBehaviour
 {
@@ -13,6 +13,7 @@ public class StoreStatistics : MonoBehaviour
     [SerializeField] int itemsSold;
     [SerializeField] float totalCheckoutWaitSeconds;
     [SerializeField] int checkoutWaitSampleCount;
+    [SerializeField] int stockoutCount;
     [SerializeField] List<ProductDailyStatistic> productStatistics = new List<ProductDailyStatistic>();
 
     readonly Dictionary<ProductDefinition, ProductDailyStatistic> statisticsByProduct =
@@ -25,6 +26,7 @@ public class StoreStatistics : MonoBehaviour
     public int ItemsSold => itemsSold;
     public float TotalCheckoutWaitSeconds => totalCheckoutWaitSeconds;
     public int CheckoutWaitSampleCount => checkoutWaitSampleCount;
+    public int StockoutCount => stockoutCount;
 
     public float AverageCheckoutWaitSeconds
     {
@@ -147,6 +149,17 @@ public class StoreStatistics : MonoBehaviour
         checkoutWaitSampleCount += 1;
     }
 
+    public void RecordStockout()
+    {
+        if (stockoutCount == int.MaxValue)
+        {
+            Debug.LogWarning("StoreStatistics: 품절 횟수가 표현 범위를 넘어 기록하지 않습니다.", this);
+            return;
+        }
+
+        stockoutCount += 1;
+    }
+
     public bool TryGetTrackedProductSales(
         int index,
         out ProductDefinition product,
@@ -188,6 +201,7 @@ public class StoreStatistics : MonoBehaviour
         itemsSold = 0;
         totalCheckoutWaitSeconds = 0f;
         checkoutWaitSampleCount = 0;
+        stockoutCount = 0;
         warnedUntrackedProducts.Clear();
         productStatistics.Clear();
         statisticsByProduct.Clear();

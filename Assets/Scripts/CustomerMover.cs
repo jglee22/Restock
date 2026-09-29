@@ -48,6 +48,10 @@ public class CustomerMover : MonoBehaviour
     float browseDuration;
     readonly List<CustomerBasketItem> basket = new List<CustomerBasketItem>();
     readonly HashSet<ProductDefinition> attemptedProducts = new HashSet<ProductDefinition>();
+    // 같은 고객이 같은 상품의 품절을 반복 집계하지 않도록 방문 단위로 기억한다.
+    readonly HashSet<ProductDefinition> recordedStockouts = new HashSet<ProductDefinition>();
+    StoreStatistics statistics;
+    bool missingStatisticsWarned;
     int targetItemCount;
     Transform checkoutQueueTarget;
     bool checkoutTargetDirty;
@@ -88,6 +92,8 @@ public class CustomerMover : MonoBehaviour
         browseDuration = browse * definition.BrowseTimeModifier;
         basket.Clear();
         attemptedProducts.Clear();
+        recordedStockouts.Clear();
+        statistics = Object.FindAnyObjectByType<StoreStatistics>();
         targetItemCount = NextTargetItemCount();
         agent = GetComponent<NavMeshAgent>();
         StartCoroutine(Visit());
@@ -434,6 +440,8 @@ public class CustomerMover : MonoBehaviour
             return null;
         }
 
+        ObserveStockouts();
+
         int candidateCount = 0;
         for (int index = 0; index < shoppingShelves.Length; index++)
         {
@@ -467,6 +475,56 @@ public class CustomerMover : MonoBehaviour
         }
 
         return null;
+    }
+
+    void ObserveStockouts()
+    {
+        for (int index = 0; index < shoppingShelves.Length; index++)
+        {
+            Shelf shelf = shoppingShelves[index];
+            ProductDefinition product = shelf != null ? shelf.AssignedProduct : null;
+            if (product == null || attemptedProducts.Contains(product) || recordedStockouts.Contains(product))
+            {
+                continue;
+            }
+
+            bool assigned = false;
+            bool hasStock = false;
+            for (int otherIndex = 0; otherIndex < shoppingShelves.Length; otherIndex++)
+            {
+                Shelf other = shoppingShelves[otherIndex];
+                if (other == null || other.AssignedProduct != product)
+                {
+                    continue;
+                }
+
+                assigned = true;
+                if (other.CurrentQuantity > 0)
+                {
+                    hasStock = true;
+                    break;
+                }
+            }
+
+            if (!assigned || hasStock)
+            {
+                continue;
+            }
+
+            recordedStockouts.Add(product);
+            if (statistics == null)
+            {
+                if (!missingStatisticsWarned)
+                {
+                    missingStatisticsWarned = true;
+                    Debug.LogWarning("CustomerMover: StoreStatistics가 없어 품절을 기록하지 않습니다.", this);
+                }
+
+                continue;
+            }
+
+            statistics.RecordStockout();
+        }
     }
 
     bool CanShop(Shelf shelf, Shelf excludedShelf)
