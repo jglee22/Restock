@@ -27,6 +27,10 @@ public class CustomerSpawner : MonoBehaviour
 
     public int ActiveCustomerCount => activeCustomerCount;
 
+    public IReadOnlyList<Shelf> ShoppingShelves => shoppingShelves;
+
+    public IReadOnlyList<CheckoutCounter> AvailableCheckouts => availableCheckouts;
+
     void Awake()
     {
         RegisterCheckout(checkout);
