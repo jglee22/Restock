@@ -6,6 +6,14 @@ using UnityEngine.UI;
 
 public class BuildModeController : MonoBehaviour
 {
+    public enum BuildToolMode
+    {
+        None,
+        Placement,
+        MoveSelect,
+        Moving
+    }
+
     const float DefaultCellSize = 1f;
     const float OverlapPadding = 0.02f;
     const float OverlapHalfHeight = 1.1f;
@@ -27,6 +35,7 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] Button shelfButton;
     [SerializeField] Button refrigeratorButton;
     [SerializeField] Button checkoutButton;
+    [SerializeField] Button moveButton;
     [SerializeField] Button exitButton;
 
     readonly Collider[] overlapHits = new Collider[32];
@@ -39,11 +48,18 @@ public class BuildModeController : MonoBehaviour
     UnityEngine.Events.UnityAction selectShelf;
     UnityEngine.Events.UnityAction selectRefrigerator;
     UnityEngine.Events.UnityAction selectCheckout;
+    UnityEngine.Events.UnityAction selectMove;
     Renderer[] previewRenderers;
     FacilityDefinition selected;
     Vector2Int currentOrigin;
     Quaternion previewBaseRotation = Quaternion.identity;
     int rotationQuarterTurns;
+    BuildToolMode toolMode;
+    PlacedFacility movingFacility;
+    Vector2Int originalOrigin;
+    int originalQuarterTurns;
+    Vector3 originalPosition;
+    Quaternion originalRotation;
     bool buildModeActive;
     bool previewValid;
     bool hasGrid;
@@ -65,6 +81,7 @@ public class BuildModeController : MonoBehaviour
     public float CellSize => cellSize;
     public int GridWidth => gridWidth;
     public int GridDepth => gridDepth;
+    public BuildToolMode ToolMode => toolMode;
 
     void Awake()
     {
@@ -87,8 +104,11 @@ public class BuildModeController : MonoBehaviour
             shelfButton.onClick.AddListener(selectShelf);
         if (refrigeratorButton != null)
             refrigeratorButton.onClick.AddListener(selectRefrigerator);
+        selectMove = BeginMoveSelect;
         if (checkoutButton != null)
             checkoutButton.onClick.AddListener(selectCheckout);
+        if (moveButton != null)
+            moveButton.onClick.AddListener(selectMove);
         if (exitButton != null)
             exitButton.onClick.AddListener(ExitBuildMode);
     }
@@ -103,6 +123,8 @@ public class BuildModeController : MonoBehaviour
             refrigeratorButton.onClick.RemoveListener(selectRefrigerator);
         if (checkoutButton != null)
             checkoutButton.onClick.RemoveListener(selectCheckout);
+        if (moveButton != null)
+            moveButton.onClick.RemoveListener(selectMove);
         if (exitButton != null)
             exitButton.onClick.RemoveListener(ExitBuildMode);
     }
@@ -124,29 +146,42 @@ public class BuildModeController : MonoBehaviour
 
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
         {
-            ExitBuildMode();
+            if (toolMode == BuildToolMode.Moving)
+                CancelMove();
+            else
+                ExitBuildMode();
             return;
         }
 
-        if (Keyboard.current.rKey.wasPressedThisFrame && selected != null && preview != null)
-            rotationQuarterTurns = PlacedFacility.NormalizeQuarterTurns(rotationQuarterTurns + 1);
-
-        UpdatePreview();
-
-        if (Mouse.current != null
-            && Mouse.current.leftButton.wasPressedThisFrame
-            && preview != null
-            && previewValid
-            && !IsPointerOverUI())
+        if (toolMode != BuildToolMode.MoveSelect
+            && Keyboard.current.rKey.wasPressedThisFrame
+            && selected != null
+            && preview != null)
         {
-            PlaceSelected();
+            rotationQuarterTurns = PlacedFacility.NormalizeQuarterTurns(rotationQuarterTurns + 1);
         }
+
+        if (toolMode == BuildToolMode.Placement || toolMode == BuildToolMode.Moving)
+            UpdatePreview();
+
+        if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame || IsPointerOverUI())
+            return;
+
+        if (toolMode == BuildToolMode.MoveSelect)
+            TryBeginMoveFromPointer();
+        else if (toolMode == BuildToolMode.Moving && preview != null && previewValid)
+            ConfirmMove();
+        else if (toolMode == BuildToolMode.Placement && preview != null && previewValid)
+            PlaceSelected();
     }
 
     public void EnterBuildMode()
     {
         if (!IsPreparation())
             return;
+
+        if (toolMode == BuildToolMode.Moving)
+            CancelMove();
 
         buildModeActive = true;
         rotationQuarterTurns = 0;
@@ -156,12 +191,31 @@ public class BuildModeController : MonoBehaviour
 
     public void ExitBuildMode()
     {
+        if (toolMode == BuildToolMode.Moving)
+            CancelMove();
+
         buildModeActive = false;
+        toolMode = BuildToolMode.None;
         rotationQuarterTurns = 0;
         selected = null;
+        movingFacility = null;
         DestroyPreview();
         if (buildPanel != null)
             buildPanel.SetActive(false);
+    }
+
+    public void BeginMoveSelect()
+    {
+        if (!buildModeActive || !IsPreparation())
+            return;
+
+        if (toolMode == BuildToolMode.Moving)
+            CancelMove();
+
+        selected = null;
+        rotationQuarterTurns = 0;
+        DestroyPreview();
+        toolMode = BuildToolMode.MoveSelect;
     }
 
     public void SelectFacility(int index)
@@ -175,6 +229,10 @@ public class BuildModeController : MonoBehaviour
         if (definition == null || definition.Prefab == null)
             return;
 
+        if (toolMode == BuildToolMode.Moving)
+            CancelMove();
+
+        toolMode = BuildToolMode.Placement;
         selected = definition;
         rotationQuarterTurns = 0;
         DestroyPreview();
@@ -219,6 +277,88 @@ public class BuildModeController : MonoBehaviour
         PlacedFacility metadata = placed.AddComponent<PlacedFacility>();
         metadata.Initialize(selected, currentOrigin, rotationQuarterTurns);
         Occupy(currentOrigin, footprint);
+    }
+
+    void TryBeginMoveFromPointer()
+    {
+        if (viewCamera == null || Mouse.current == null)
+            return;
+
+        Ray ray = viewCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        if (!Physics.Raycast(ray, out RaycastHit hit, 1000f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return;
+
+        PlacedFacility placed = hit.collider.GetComponentInParent<PlacedFacility>();
+        if (placed == null || placed.Definition == null || placed.Definition.Prefab == null)
+            return;
+
+        BeginMoving(placed);
+    }
+
+    void BeginMoving(PlacedFacility placed)
+    {
+        movingFacility = placed;
+        originalOrigin = placed.GridOrigin;
+        originalQuarterTurns = placed.RotationQuarterTurns;
+        originalPosition = placed.transform.position;
+        originalRotation = placed.transform.rotation;
+        selected = placed.Definition;
+        rotationQuarterTurns = originalQuarterTurns;
+        Release(originalOrigin, RotatedGridSize(selected.GridSize, originalQuarterTurns));
+        placed.gameObject.SetActive(false);
+
+        DestroyPreview();
+        preview = Instantiate(selected.Prefab);
+        preview.name = "FacilityPreview";
+        previewBaseRotation = preview.transform.rotation;
+        DisablePreviewGameplay(preview);
+        previewRenderers = preview.GetComponentsInChildren<Renderer>(true);
+        toolMode = BuildToolMode.Moving;
+        UpdatePreview();
+    }
+
+    void ConfirmMove()
+    {
+        if (movingFacility == null)
+            return;
+
+        Vector2Int footprint = CurrentFootprintSize;
+        Vector3 position = preview.transform.position;
+        Quaternion rotation = preview.transform.rotation;
+        Vector2Int origin = currentOrigin;
+        int quarterTurns = rotationQuarterTurns;
+        FacilityDefinition definition = selected;
+
+        GameObject target = movingFacility.gameObject;
+        target.SetActive(true);
+        target.transform.SetPositionAndRotation(position, rotation);
+        target.name = "Placed_" + definition.FacilityId + "_" + origin.x + "_" + origin.y;
+        movingFacility.UpdatePlacement(origin, quarterTurns);
+        Occupy(origin, footprint);
+
+        movingFacility = null;
+        selected = null;
+        rotationQuarterTurns = 0;
+        DestroyPreview();
+        toolMode = BuildToolMode.MoveSelect;
+    }
+
+    void CancelMove()
+    {
+        if (movingFacility != null)
+        {
+            GameObject target = movingFacility.gameObject;
+            target.SetActive(true);
+            target.transform.SetPositionAndRotation(originalPosition, originalRotation);
+            Occupy(originalOrigin, RotatedGridSize(movingFacility.Definition.GridSize, originalQuarterTurns));
+            movingFacility = null;
+        }
+
+        selected = null;
+        rotationQuarterTurns = 0;
+        DestroyPreview();
+        if (buildModeActive)
+            toolMode = BuildToolMode.MoveSelect;
     }
 
     void CacheGrid()
@@ -335,6 +475,15 @@ public class BuildModeController : MonoBehaviour
         {
             for (int y = 0; y < size.y; y++)
                 occupiedCells.Add(new Vector2Int(origin.x + x, origin.y + y));
+        }
+    }
+
+    void Release(Vector2Int origin, Vector2Int size)
+    {
+        for (int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+                occupiedCells.Remove(new Vector2Int(origin.x + x, origin.y + y));
         }
     }
 

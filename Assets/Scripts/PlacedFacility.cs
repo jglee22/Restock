@@ -13,6 +13,11 @@ public class PlacedFacility : MonoBehaviour
     public void Initialize(FacilityDefinition source, Vector2Int origin, int quarterTurns)
     {
         definition = source;
+        UpdatePlacement(origin, quarterTurns);
+    }
+
+    public void UpdatePlacement(Vector2Int origin, int quarterTurns)
+    {
         gridOrigin = origin;
         rotationQuarterTurns = NormalizeQuarterTurns(quarterTurns);
     }
