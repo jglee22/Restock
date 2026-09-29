@@ -42,6 +42,8 @@ public class BuildModeController : MonoBehaviour
     Renderer[] previewRenderers;
     FacilityDefinition selected;
     Vector2Int currentOrigin;
+    Quaternion previewBaseRotation = Quaternion.identity;
+    int rotationQuarterTurns;
     bool buildModeActive;
     bool previewValid;
     bool hasGrid;
@@ -56,6 +58,10 @@ public class BuildModeController : MonoBehaviour
     public bool HasPreview => preview != null;
     public bool IsCurrentPlacementValid => preview != null && previewValid;
     public Vector2Int CurrentGridOrigin => currentOrigin;
+    public int RotationQuarterTurns => rotationQuarterTurns;
+    public Vector2Int CurrentFootprintSize => selected == null
+        ? Vector2Int.zero
+        : RotatedGridSize(selected.GridSize, rotationQuarterTurns);
     public float CellSize => cellSize;
     public int GridWidth => gridWidth;
     public int GridDepth => gridDepth;
@@ -122,6 +128,9 @@ public class BuildModeController : MonoBehaviour
             return;
         }
 
+        if (Keyboard.current.rKey.wasPressedThisFrame && selected != null && preview != null)
+            rotationQuarterTurns = PlacedFacility.NormalizeQuarterTurns(rotationQuarterTurns + 1);
+
         UpdatePreview();
 
         if (Mouse.current != null
@@ -140,6 +149,7 @@ public class BuildModeController : MonoBehaviour
             return;
 
         buildModeActive = true;
+        rotationQuarterTurns = 0;
         if (buildPanel != null)
             buildPanel.SetActive(true);
     }
@@ -147,6 +157,7 @@ public class BuildModeController : MonoBehaviour
     public void ExitBuildMode()
     {
         buildModeActive = false;
+        rotationQuarterTurns = 0;
         selected = null;
         DestroyPreview();
         if (buildPanel != null)
@@ -165,9 +176,11 @@ public class BuildModeController : MonoBehaviour
             return;
 
         selected = definition;
+        rotationQuarterTurns = 0;
         DestroyPreview();
         preview = Instantiate(definition.Prefab);
         preview.name = "FacilityPreview";
+        previewBaseRotation = preview.transform.rotation;
         DisablePreviewGameplay(preview);
         previewRenderers = preview.GetComponentsInChildren<Renderer>(true);
         UpdatePreview();
@@ -184,24 +197,28 @@ public class BuildModeController : MonoBehaviour
         }
 
         preview.SetActive(true);
-        currentOrigin = OriginFor(worldPoint, selected.GridSize);
-        Vector3 center = FootprintCenter(currentOrigin, selected.GridSize);
+        Vector2Int footprint = CurrentFootprintSize;
+        preview.transform.rotation = PlacementRotation();
+        currentOrigin = OriginFor(worldPoint, footprint);
+        Vector3 center = FootprintCenter(currentOrigin, footprint);
         PlaceOnFloor(preview, center);
-        previewValid = IsInsideFloor(currentOrigin, selected.GridSize)
-            && !OverlapsBlockedCell(currentOrigin, selected.GridSize)
-            && !OverlapsExisting(center, selected.GridSize);
+        previewValid = IsInsideFloor(currentOrigin, footprint)
+            && !OverlapsBlockedCell(currentOrigin, footprint)
+            && !OverlapsExisting(center, footprint);
         ApplyTint(previewValid ? ValidTint : InvalidTint);
     }
 
     void PlaceSelected()
     {
+        Vector2Int footprint = CurrentFootprintSize;
         GameObject placed = Instantiate(selected.Prefab, placedRoot);
         placed.name = "Placed_" + selected.FacilityId + "_" + currentOrigin.x + "_" + currentOrigin.y;
-        PlaceOnFloor(placed, FootprintCenter(currentOrigin, selected.GridSize));
+        placed.transform.rotation = PlacementRotation();
+        PlaceOnFloor(placed, FootprintCenter(currentOrigin, footprint));
 
         PlacedFacility metadata = placed.AddComponent<PlacedFacility>();
-        metadata.Initialize(selected, currentOrigin);
-        Occupy(currentOrigin, selected.GridSize);
+        metadata.Initialize(selected, currentOrigin, rotationQuarterTurns);
+        Occupy(currentOrigin, footprint);
     }
 
     void CacheGrid()
@@ -232,6 +249,20 @@ public class BuildModeController : MonoBehaviour
 
         worldPoint = ray.GetPoint(distance);
         return true;
+    }
+
+    static Vector2Int RotatedGridSize(Vector2Int baseSize, int quarterTurns)
+    {
+        int turns = PlacedFacility.NormalizeQuarterTurns(quarterTurns);
+        if (turns == 1 || turns == 3)
+            return new Vector2Int(baseSize.y, baseSize.x);
+        return baseSize;
+    }
+
+    Quaternion PlacementRotation()
+    {
+        Quaternion yaw = Quaternion.Euler(0f, rotationQuarterTurns * 90f, 0f);
+        return previewBaseRotation * yaw;
     }
 
     Vector2Int OriginFor(Vector3 worldPoint, Vector2Int size)
@@ -350,6 +381,7 @@ public class BuildModeController : MonoBehaviour
             Destroy(preview);
         preview = null;
         previewRenderers = null;
+        previewBaseRotation = Quaternion.identity;
         previewValid = false;
     }
 
