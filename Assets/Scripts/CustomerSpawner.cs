@@ -14,6 +14,7 @@ public class CustomerSpawner : MonoBehaviour
     [SerializeField] CheckoutCounter checkout;
     [SerializeField] StorePricing storePricing;
     [SerializeField] StoreStatistics storeStatistics;
+    [SerializeField] StoreEventSystem eventSystem;
     [SerializeField] CustomerDefinition[] customerDefinitions;
     [SerializeField] float spawnInterval = 4f;
     [SerializeField] int maxActiveCustomers = 5;
@@ -26,6 +27,28 @@ public class CustomerSpawner : MonoBehaviour
     int nextCheckoutIndex;
 
     public int ActiveCustomerCount => activeCustomerCount;
+
+    public int MaxActiveCustomers => maxActiveCustomers;
+
+    float EffectiveSpawnInterval
+    {
+        get
+        {
+            if (eventSystem == null)
+            {
+                return spawnInterval;
+            }
+
+            float interval = spawnInterval * eventSystem.SpawnIntervalMultiplier;
+            if (interval <= 0f)
+            {
+                WarnOnce($"CustomerSpawner: 적용 Spawn Interval이 0 이하입니다. 기본값 {spawnInterval}초를 사용합니다.");
+                return spawnInterval;
+            }
+
+            return interval;
+        }
+    }
 
     public IReadOnlyList<Shelf> ShoppingShelves => shoppingShelves;
 
@@ -203,7 +226,7 @@ public class CustomerSpawner : MonoBehaviour
         }
 
         spawnTimer += Time.deltaTime;
-        if (spawnTimer < spawnInterval)
+        if (spawnTimer < EffectiveSpawnInterval)
         {
             return;
         }
@@ -254,8 +277,13 @@ public class CustomerSpawner : MonoBehaviour
             WarnOnce("CustomerSpawner: StorePricing이 연결되지 않았습니다.");
         }
 
+        if (eventSystem == null)
+        {
+            WarnOnce("CustomerSpawner: StoreEventSystem이 연결되지 않았습니다.");
+        }
+
         activeCustomerCount += 1;
-        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, selectedCheckout, storePricing, definition);
+        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, selectedCheckout, storePricing, definition, eventSystem);
         if (storeStatistics == null)
         {
             WarnOnce("CustomerSpawner: StoreStatistics가 연결되지 않아 방문 고객을 기록하지 못했습니다.");

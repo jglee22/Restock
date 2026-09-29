@@ -9,6 +9,7 @@ public class CheckoutCounter : MonoBehaviour
     [SerializeField] Transform[] queuePoints;
     [SerializeField] StoreEconomy economy;
     [SerializeField] StoreStatistics statistics;
+    [SerializeField] StoreEventSystem eventSystem;
     [SerializeField] float checkoutDuration = 1.5f;
 
     readonly List<CustomerMover> queue = new List<CustomerMover>();
@@ -29,6 +30,18 @@ public class CheckoutCounter : MonoBehaviour
         statistics = storeStatistics;
         return true;
     }
+
+    public void BindEventSystem(StoreEventSystem storeEventSystem)
+    {
+        if (storeEventSystem == null)
+        {
+            WarnOnce("CheckoutCounter: StoreEventSystem이 연결되지 않았습니다.");
+            return;
+        }
+
+        eventSystem = storeEventSystem;
+    }
+
     int checkoutToken;
     bool hasWarned;
 
@@ -105,7 +118,23 @@ public class CheckoutCounter : MonoBehaviour
 
     IEnumerator FinishCheckout(CustomerMover customer, int token)
     {
-        yield return new WaitForSeconds(checkoutDuration);
+        float duration = checkoutDuration;
+        if (eventSystem == null)
+        {
+            WarnOnce("CheckoutCounter: StoreEventSystem이 연결되지 않았습니다.");
+        }
+        else
+        {
+            duration *= eventSystem.CheckoutDurationMultiplier;
+        }
+
+        if (duration < 0f)
+        {
+            WarnOnce($"CheckoutCounter: 적용 Checkout Duration이 0 미만입니다. 기본값 {checkoutDuration}초를 사용합니다.");
+            duration = checkoutDuration;
+        }
+
+        yield return new WaitForSeconds(duration);
         if (token != checkoutToken)
         {
             yield break;

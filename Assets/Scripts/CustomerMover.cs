@@ -43,6 +43,7 @@ public class CustomerMover : MonoBehaviour
     Shelf[] shoppingShelves;
     CheckoutCounter checkout;
     StorePricing pricing;
+    StoreEventSystem eventSystem;
     CustomerDefinition customerDefinition;
     int remainingBudget;
     float browseDuration;
@@ -79,7 +80,8 @@ public class CustomerMover : MonoBehaviour
         float browse,
         CheckoutCounter checkoutCounter,
         StorePricing storePricing,
-        CustomerDefinition definition)
+        CustomerDefinition definition,
+        StoreEventSystem storeEventSystem)
     {
         spawner = owner;
         insidePoint = inside;
@@ -87,6 +89,7 @@ public class CustomerMover : MonoBehaviour
         shoppingShelves = shelves;
         checkout = checkoutCounter;
         pricing = storePricing;
+        eventSystem = storeEventSystem;
         customerDefinition = definition;
         remainingBudget = definition.Budget;
         browseDuration = browse * definition.BrowseTimeModifier;
@@ -372,7 +375,8 @@ public class CustomerMover : MonoBehaviour
             product.BaseSellPrice,
             product.Popularity,
             customerDefinition.PriceSensitivity);
-        return Random.value < chance;
+        float eventMultiplier = eventSystem != null ? eventSystem.GetPurchaseChanceMultiplier(product) : 1f;
+        return Random.value < Mathf.Clamp01(chance * eventMultiplier);
     }
 
     static float CalculatePurchaseChance(int currentPrice, int basePrice, float popularity, float priceSensitivity)

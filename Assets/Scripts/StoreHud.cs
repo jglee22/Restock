@@ -13,11 +13,13 @@ public class StoreHud : MonoBehaviour
     [SerializeField] StoreStatistics statistics;
     [SerializeField] StorePersistence persistence;
     [SerializeField] CustomerSpawner customerSpawner;
+    [SerializeField] StoreEventSystem eventSystem;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
     [SerializeField] TMP_Text phaseText;
     [SerializeField] TMP_Text moneyText;
     [SerializeField] TMP_Text resultText;
+    [SerializeField] TMP_Text eventText;
 
     [SerializeField] Button startBusinessButton;
     [SerializeField] Button showResultButton;
@@ -115,6 +117,7 @@ public class StoreHud : MonoBehaviour
         SetText(timeText, session.TimeLabel);
         SetText(phaseText, session.Phase.ToString());
         SetText(skipTimeLabel, session.SkipTimeLabel);
+        RefreshEvent();
         RefreshMoney();
         RefreshLoadButton();
 
@@ -168,6 +171,23 @@ public class StoreHud : MonoBehaviour
         }
 
         return customerSpawner.ActiveCustomerCount <= 0;
+    }
+
+    void RefreshEvent()
+    {
+        if (eventSystem == null)
+        {
+            WarnOnce("StoreHud: StoreEventSystem이 연결되지 않아 이벤트를 표시할 수 없습니다.");
+            return;
+        }
+
+        if (eventText == null)
+        {
+            WarnOnce("StoreHud: 이벤트 텍스트가 연결되지 않았습니다.");
+            return;
+        }
+
+        SetText(eventText, eventSystem.StatusLabel);
     }
 
     void RefreshMoney()
@@ -229,6 +249,10 @@ public class StoreHud : MonoBehaviour
         float averageCheckoutWait = statistics != null ? statistics.AverageCheckoutWaitSeconds : 0f;
         var builder = new StringBuilder();
         builder.Append(session.DayLabel).Append(" 종료\n");
+        if (eventSystem != null)
+        {
+            builder.Append(eventSystem.ResultLabel).Append('\n');
+        }
         builder.Append("오늘 매출 ").Append(FormatWon(displayedRevenue)).Append('\n');
         builder.Append("매입 비용 ").Append(FormatWon(displayedExpense)).Append('\n');
         builder.Append("순이익 ").Append(FormatSignedWon(economy.NetProfit)).Append("\n\n");

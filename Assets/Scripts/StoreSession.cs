@@ -29,6 +29,7 @@ public class StoreSession : MonoBehaviour
     [SerializeField] int skipHour = 21;
     [SerializeField] int skipMinute = 50;
     [SerializeField] float realSecondsPerGameMinute = 1f;
+    [SerializeField] StoreEventSystem eventSystem;
 
     StorePhase phase = StorePhase.Preparation;
     int day = 1;
@@ -118,6 +119,13 @@ public class StoreSession : MonoBehaviour
         phase = StorePhase.Open;
         isPaused = false;
         Time.timeScale = playingTimeScale;
+        if (eventSystem == null)
+        {
+            Debug.LogWarning("StoreSession: StoreEventSystem이 연결되지 않아 오늘 이벤트를 정하지 못했습니다.", this);
+            return;
+        }
+
+        eventSystem.NotifyOpen(day);
     }
 
     public void ShowResult()
@@ -145,6 +153,11 @@ public class StoreSession : MonoBehaviour
         phase = StorePhase.Preparation;
         isPaused = false;
         Time.timeScale = NormalTimeScale;
+        if (eventSystem != null)
+        {
+            eventSystem.NotifyPreparation();
+        }
+
         DayStarted?.Invoke(day);
     }
 
@@ -162,6 +175,11 @@ public class StoreSession : MonoBehaviour
         playingTimeScale = NormalTimeScale;
         currentGameMinutes = OpeningTotalMinutes;
         Time.timeScale = NormalTimeScale;
+        if (eventSystem != null)
+        {
+            eventSystem.NotifyPreparation();
+        }
+
         return true;
     }
 
