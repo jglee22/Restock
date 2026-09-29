@@ -7,7 +7,8 @@ using UnityEngine;
 // 고객, 계산 줄, 일일 통계는 저장하지 않는다.
 public class StorePersistence : MonoBehaviour
 {
-    const int SaveVersion = 1;
+    const int LegacySaveVersion = 1;
+    const int SaveVersion = 2;
     const string SaveFileName = "restock_save.json";
 
     [SerializeField] StoreSession session;
@@ -17,6 +18,7 @@ public class StorePersistence : MonoBehaviour
     [SerializeField] StoreStatistics statistics;
     [SerializeField] ProductDefinition[] products;
     [SerializeField] Shelf[] shelves;
+    [SerializeField] BuildModeController buildMode;
 
     public bool SaveFileExists => File.Exists(SaveFilePath);
 
@@ -202,6 +204,13 @@ public class StorePersistence : MonoBehaviour
             });
         }
 
+        var dynamicFacilities = new List<DynamicFacilitySaveData>();
+        if (buildMode == null || !buildMode.TryCaptureDynamicFacilities(dynamicFacilities))
+        {
+            Debug.LogWarning("StorePersistence: 배치된 시설을 저장 목록으로 만들지 못해 저장하지 않습니다.", this);
+            return false;
+        }
+
         data = new StoreSaveData
         {
             version = SaveVersion,
@@ -211,7 +220,8 @@ public class StorePersistence : MonoBehaviour
             dailyExpense = economy.DailyExpense,
             inventory = inventoryEntries,
             shelves = shelfEntries,
-            prices = priceEntries
+            prices = priceEntries,
+            dynamicFacilities = dynamicFacilities
         };
         return true;
     }
@@ -226,7 +236,7 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        if (data.version != SaveVersion)
+        if (data.version != LegacySaveVersion && data.version != SaveVersion)
         {
             error = $"지원하지 않는 저장 버전입니다. 파일 버전: {data.version}";
             return false;
@@ -265,6 +275,20 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
+        List<DynamicFacilitySaveData> dynamicFacilities = data.version == LegacySaveVersion || data.dynamicFacilities == null
+            ? new List<DynamicFacilitySaveData>()
+            : data.dynamicFacilities;
+        if (buildMode == null)
+        {
+            error = "건설 모드가 연결되지 않았습니다.";
+            return false;
+        }
+
+        if (!buildMode.TryValidateDynamicLayouts(dynamicFacilities, out error))
+        {
+            return false;
+        }
+
         validated = new ValidatedSave
         {
             day = data.day,
@@ -274,7 +298,8 @@ public class StorePersistence : MonoBehaviour
             inventoryQuantities = quantities,
             prices = priceValues,
             shelfProducts = assignedProducts,
-            shelfQuantities = shelfQuantities
+            shelfQuantities = shelfQuantities,
+            dynamicFacilities = dynamicFacilities
         };
         return true;
     }
@@ -510,6 +535,12 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
+        if (buildMode == null || !buildMode.TryReplaceDynamicLayouts(validated.dynamicFacilities))
+        {
+            Debug.LogError("StorePersistence: 배치 시설 복원에 실패했습니다.", this);
+            return false;
+        }
+
         statistics.ResetDailyStatistics();
         return true;
     }
@@ -526,6 +557,12 @@ public class StorePersistence : MonoBehaviour
         if (!TryBuildShelfMap(out _))
         {
             error = "진열 시설 Id가 비어 있거나 중복되어 있습니다.";
+            return false;
+        }
+
+        if (buildMode == null)
+        {
+            error = "건설 모드가 연결되지 않았습니다.";
             return false;
         }
 
@@ -626,6 +663,11 @@ public class StorePersistence : MonoBehaviour
             Debug.LogWarning("StorePersistence: StoreStatistics가 연결되지 않았습니다.", this);
         }
 
+        if (buildMode == null)
+        {
+            Debug.LogWarning("StorePersistence: BuildModeController가 연결되지 않았습니다.", this);
+        }
+
         if (products == null || products.Length == 0)
         {
             Debug.LogWarning("StorePersistence: 저장할 상품이 없습니다.", this);
@@ -683,6 +725,16 @@ public class StorePersistence : MonoBehaviour
         public List<ProductQuantitySaveData> inventory;
         public List<ShelfSaveData> shelves;
         public List<ProductPriceSaveData> prices;
+        public List<DynamicFacilitySaveData> dynamicFacilities;
+    }
+
+    [Serializable]
+    public class DynamicFacilitySaveData
+    {
+        public string facilityId;
+        public int gridX;
+        public int gridY;
+        public int rotationQuarterTurns;
     }
 
     [Serializable]
@@ -717,5 +769,6 @@ public class StorePersistence : MonoBehaviour
         public int[] prices;
         public ProductDefinition[] shelfProducts;
         public int[] shelfQuantities;
+        public List<DynamicFacilitySaveData> dynamicFacilities;
     }
 }

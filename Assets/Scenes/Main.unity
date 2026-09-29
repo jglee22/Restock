@@ -12900,6 +12900,7 @@ MonoBehaviour:
   - {fileID: 400302501}
   - {fileID: 1838891004}
   - {fileID: 966726215}
+  buildMode: {fileID: 486507238}
 --- !u!4 &1972270344
 Transform:
   m_ObjectHideFlags: 0
