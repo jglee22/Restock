@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Unity.AI.Navigation;
 using UnityEngine;
 using UnityEngine.AI;
+using TMPro;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -15,7 +16,8 @@ public class BuildModeController : MonoBehaviour
         Placement,
         MoveSelect,
         Moving,
-        DeleteSelect
+        DeleteSelect,
+        ProductSelect
     }
 
     const float DefaultCellSize = 1f;
@@ -46,6 +48,13 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] Button checkoutButton;
     [SerializeField] Button moveButton;
     [SerializeField] Button deleteButton;
+    [SerializeField] Button productButton;
+    [SerializeField] GameObject productAssignmentPanel;
+    [SerializeField] TMP_Text productStatusText;
+    [SerializeField] TMP_Dropdown productDropdown;
+    [SerializeField] Button applyProductButton;
+    [SerializeField] Button clearProductButton;
+    [SerializeField] Button closeProductButton;
     [SerializeField] Button exitButton;
 
     readonly Collider[] overlapHits = new Collider[32];
@@ -56,6 +65,8 @@ public class BuildModeController : MonoBehaviour
     Transform placedRoot;
     readonly List<PlacedFacility> placedFacilities = new List<PlacedFacility>();
     readonly List<Vector3> accessScratch = new List<Vector3>(8);
+    readonly List<ProductDefinition> assignmentProducts = new List<ProductDefinition>();
+    Shelf assignmentShelf;
     float cachedAgentRadius = -1f;
     bool warnedAccessSetup;
     GameObject preview;
@@ -64,6 +75,10 @@ public class BuildModeController : MonoBehaviour
     UnityEngine.Events.UnityAction selectCheckout;
     UnityEngine.Events.UnityAction selectMove;
     UnityEngine.Events.UnityAction selectDelete;
+    UnityEngine.Events.UnityAction selectProduct;
+    UnityEngine.Events.UnityAction applyProduct;
+    UnityEngine.Events.UnityAction clearProduct;
+    UnityEngine.Events.UnityAction closeProduct;
     Renderer[] previewRenderers;
     FacilityDefinition selected;
     Vector2Int currentOrigin;
@@ -106,6 +121,8 @@ public class BuildModeController : MonoBehaviour
         CacheGrid();
         if (buildPanel != null)
             buildPanel.SetActive(false);
+        if (productAssignmentPanel != null)
+            productAssignmentPanel.SetActive(false);
     }
 
     void OnEnable()
@@ -122,12 +139,24 @@ public class BuildModeController : MonoBehaviour
             refrigeratorButton.onClick.AddListener(selectRefrigerator);
         selectMove = BeginMoveSelect;
         selectDelete = BeginDeleteSelect;
+        selectProduct = BeginProductSelect;
+        applyProduct = ApplySelectedProduct;
+        clearProduct = ClearSelectedProduct;
+        closeProduct = CloseProductSelection;
         if (checkoutButton != null)
             checkoutButton.onClick.AddListener(selectCheckout);
         if (moveButton != null)
             moveButton.onClick.AddListener(selectMove);
         if (deleteButton != null)
             deleteButton.onClick.AddListener(selectDelete);
+        if (productButton != null)
+            productButton.onClick.AddListener(selectProduct);
+        if (applyProductButton != null)
+            applyProductButton.onClick.AddListener(applyProduct);
+        if (clearProductButton != null)
+            clearProductButton.onClick.AddListener(clearProduct);
+        if (closeProductButton != null)
+            closeProductButton.onClick.AddListener(closeProduct);
         if (exitButton != null)
             exitButton.onClick.AddListener(ExitBuildMode);
     }
@@ -146,6 +175,14 @@ public class BuildModeController : MonoBehaviour
             moveButton.onClick.RemoveListener(selectMove);
         if (deleteButton != null)
             deleteButton.onClick.RemoveListener(selectDelete);
+        if (productButton != null)
+            productButton.onClick.RemoveListener(selectProduct);
+        if (applyProductButton != null)
+            applyProductButton.onClick.RemoveListener(applyProduct);
+        if (clearProductButton != null)
+            clearProductButton.onClick.RemoveListener(clearProduct);
+        if (closeProductButton != null)
+            closeProductButton.onClick.RemoveListener(closeProduct);
         if (exitButton != null)
             exitButton.onClick.RemoveListener(ExitBuildMode);
     }
@@ -162,6 +199,10 @@ public class BuildModeController : MonoBehaviour
             Debug.LogWarning("BuildModeController: StoreStatistics가 연결되지 않았습니다.", this);
         if (navMeshSurface == null)
             Debug.LogWarning("BuildModeController: NavMeshSurface가 연결되지 않았습니다.", this);
+        if (productButton == null || productAssignmentPanel == null || productStatusText == null || productDropdown == null)
+            Debug.LogWarning("BuildModeController: 상품 지정 UI가 연결되지 않았습니다.", this);
+        if (applyProductButton == null || clearProductButton == null || closeProductButton == null)
+            Debug.LogWarning("BuildModeController: 상품 지정 버튼이 연결되지 않았습니다.", this);
     }
 
     void Update()
@@ -183,6 +224,8 @@ public class BuildModeController : MonoBehaviour
         {
             if (toolMode == BuildToolMode.Moving)
                 CancelMove();
+            else if (toolMode == BuildToolMode.ProductSelect && assignmentShelf != null)
+                CloseProductSelection();
             else
                 ExitBuildMode();
             return;
@@ -206,6 +249,8 @@ public class BuildModeController : MonoBehaviour
             TryBeginMoveFromPointer();
         else if (toolMode == BuildToolMode.DeleteSelect)
             TryDeleteFromPointer();
+        else if (toolMode == BuildToolMode.ProductSelect)
+            TrySelectProductTarget();
         else if (toolMode == BuildToolMode.Moving && preview != null && previewValid)
             ConfirmMove();
         else if (toolMode == BuildToolMode.Placement && preview != null && previewValid)
@@ -237,6 +282,7 @@ public class BuildModeController : MonoBehaviour
         selected = null;
         movingFacility = null;
         DestroyPreview();
+        CloseProductSelection();
         if (buildPanel != null)
             buildPanel.SetActive(false);
     }
@@ -252,6 +298,7 @@ public class BuildModeController : MonoBehaviour
         selected = null;
         rotationQuarterTurns = 0;
         DestroyPreview();
+        CloseProductSelection();
         toolMode = BuildToolMode.MoveSelect;
     }
 
@@ -266,6 +313,7 @@ public class BuildModeController : MonoBehaviour
         selected = null;
         rotationQuarterTurns = 0;
         DestroyPreview();
+        CloseProductSelection();
         toolMode = BuildToolMode.DeleteSelect;
     }
 
@@ -286,6 +334,7 @@ public class BuildModeController : MonoBehaviour
         toolMode = BuildToolMode.Placement;
         selected = definition;
         rotationQuarterTurns = 0;
+        CloseProductSelection();
         DestroyPreview();
         preview = Instantiate(definition.Prefab);
         preview.name = "FacilityPreview";
@@ -381,12 +430,17 @@ public class BuildModeController : MonoBehaviour
             if (placed == null || placed.Definition == null || string.IsNullOrWhiteSpace(placed.Definition.FacilityId))
                 return false;
 
+            if (!TryCaptureProductState(placed, out string productId, out int quantity))
+                return false;
+
             results.Add(new StorePersistence.DynamicFacilitySaveData
             {
                 facilityId = placed.Definition.FacilityId,
                 gridX = placed.GridOrigin.x,
                 gridY = placed.GridOrigin.y,
-                rotationQuarterTurns = placed.RotationQuarterTurns
+                rotationQuarterTurns = placed.RotationQuarterTurns,
+                productId = productId,
+                quantity = quantity
             });
         }
 
@@ -433,7 +487,7 @@ public class BuildModeController : MonoBehaviour
         return true;
     }
 
-    public bool TryReplaceDynamicLayouts(List<StorePersistence.DynamicFacilitySaveData> records)
+    public bool TryReplaceDynamicLayouts(List<StorePersistence.DynamicFacilitySaveData> records, ProductDefinition[] catalog)
     {
         if (records == null || !hasGrid)
             return false;
@@ -446,7 +500,19 @@ public class BuildModeController : MonoBehaviour
             if (!TryGetFacilityDefinition(record.facilityId, out FacilityDefinition definition) || definition.Prefab == null)
                 return false;
 
-            SpawnPlacedFacility(definition, new Vector2Int(record.gridX, record.gridY), record.rotationQuarterTurns);
+            PlacedFacility placed = SpawnPlacedFacility(definition, new Vector2Int(record.gridX, record.gridY), record.rotationQuarterTurns);
+            if (definition.FacilityType == FacilityType.Checkout)
+                continue;
+
+            if (!TryGetShoppingShelf(placed, out Shelf shelf))
+                return false;
+
+            ProductDefinition product = null;
+            if (!string.IsNullOrEmpty(record.productId) && !TryFindCatalogProduct(catalog, record.productId, out product))
+                return false;
+
+            if (!shelf.TryRestoreState(product, record.quantity))
+                return false;
         }
 
         RequestNavMeshRefresh();
@@ -608,6 +674,7 @@ public class BuildModeController : MonoBehaviour
         return false;
     }
 
+    // Load는 저장 상태로 통째로 바꾸므로 현재 진열 수량을 창고로 되돌리지 않는다.
     void ClearDynamicFacilities()
     {
         for (int index = placedFacilities.Count - 1; index >= 0; index--)
@@ -728,6 +795,12 @@ public class BuildModeController : MonoBehaviour
         Vector2Int footprint = RotatedGridSize(placed.Definition.GridSize, quarterTurns);
         if (!FootprintIsOccupied(origin, footprint))
             Debug.LogWarning("삭제할 시설의 점유 칸이 회전된 발자국과 일치하지 않습니다.");
+
+        if (TryGetShoppingShelf(placed, out Shelf shelf) && !ReturnShelfStock(shelf))
+            return;
+
+        if (assignmentShelf != null && placed.GetComponent<Shelf>() == assignmentShelf)
+            CloseProductSelection();
 
         int cost = placed.Definition.Cost;
         UnregisterFacilityRuntimeDependencies(placed);
@@ -1372,6 +1445,197 @@ public class BuildModeController : MonoBehaviour
     bool IsPreparation()
     {
         return session != null && session.Phase == StorePhase.Preparation;
+    }
+
+    public void BeginProductSelect()
+    {
+        if (!buildModeActive || !IsPreparation())
+            return;
+
+        if (toolMode == BuildToolMode.Moving)
+            CancelMove();
+
+        selected = null;
+        rotationQuarterTurns = 0;
+        DestroyPreview();
+        CloseProductSelection();
+        toolMode = BuildToolMode.ProductSelect;
+    }
+
+    void TrySelectProductTarget()
+    {
+        if (!TryGetPlacedFacilityUnderPointer(out PlacedFacility placed))
+            return;
+        if (!TryGetShoppingShelf(placed, out Shelf shelf))
+            return;
+
+        assignmentShelf = shelf;
+        RefreshProductOptions();
+        RefreshProductStatus();
+        if (productAssignmentPanel != null)
+            productAssignmentPanel.SetActive(true);
+    }
+
+    void ApplySelectedProduct()
+    {
+        if (assignmentShelf == null || productDropdown == null)
+            return;
+
+        int index = productDropdown.value;
+        if (index < 0 || index >= assignmentProducts.Count)
+            return;
+
+        ProductDefinition product = assignmentProducts[index];
+        if (product == null || product == assignmentShelf.AssignedProduct)
+            return;
+        if (product.StorageType != assignmentShelf.AcceptedStorageType)
+            return;
+        if (!ReturnShelfStock(assignmentShelf))
+            return;
+        if (!assignmentShelf.TryAssignProduct(product))
+            return;
+
+        RefreshProductStatus();
+    }
+
+    void ClearSelectedProduct()
+    {
+        if (assignmentShelf == null)
+            return;
+        if (assignmentShelf.AssignedProduct == null && assignmentShelf.CurrentQuantity == 0)
+            return;
+        if (!ReturnShelfStock(assignmentShelf))
+            return;
+
+        assignmentShelf.TryAssignProduct(null);
+        RefreshProductStatus();
+    }
+
+    void CloseProductSelection()
+    {
+        assignmentShelf = null;
+        assignmentProducts.Clear();
+        if (productDropdown != null)
+            productDropdown.ClearOptions();
+        if (productAssignmentPanel != null)
+            productAssignmentPanel.SetActive(false);
+    }
+
+    void RefreshProductOptions()
+    {
+        assignmentProducts.Clear();
+        if (productDropdown == null)
+            return;
+
+        productDropdown.ClearOptions();
+        if (assignmentShelf == null || storeInventory == null)
+            return;
+
+        var options = new List<TMP_Dropdown.OptionData>();
+        int selectedIndex = 0;
+        for (int index = 0; index < storeInventory.ProductDefinitionCount; index++)
+        {
+            ProductDefinition product = storeInventory.GetProductDefinition(index);
+            if (product == null || product.StorageType != assignmentShelf.AcceptedStorageType)
+                continue;
+
+            if (product == assignmentShelf.AssignedProduct)
+                selectedIndex = assignmentProducts.Count;
+
+            assignmentProducts.Add(product);
+            options.Add(new TMP_Dropdown.OptionData(product.DisplayName));
+        }
+
+        if (options.Count == 0)
+            return;
+
+        productDropdown.AddOptions(options);
+        productDropdown.SetValueWithoutNotify(selectedIndex);
+        productDropdown.RefreshShownValue();
+    }
+
+    void RefreshProductStatus()
+    {
+        if (productStatusText == null || assignmentShelf == null)
+            return;
+
+        PlacedFacility placed = assignmentShelf.GetComponent<PlacedFacility>();
+        string facilityName = placed != null && placed.Definition != null
+            ? placed.Definition.DisplayName
+            : "진열대";
+        string productName = assignmentShelf.AssignedProduct == null
+            ? "없음"
+            : assignmentShelf.AssignedProduct.DisplayName;
+        productStatusText.text = facilityName + "\n현재 상품: " + productName
+            + "\n수량: " + assignmentShelf.CurrentQuantity + " / " + assignmentShelf.Capacity;
+    }
+
+    bool TryCaptureProductState(PlacedFacility placed, out string productId, out int quantity)
+    {
+        productId = string.Empty;
+        quantity = 0;
+        if (placed == null || placed.Definition == null)
+            return false;
+        if (placed.Definition.FacilityType == FacilityType.Checkout)
+            return true;
+        if (!TryGetShoppingShelf(placed, out Shelf shelf))
+            return false;
+
+        ProductDefinition assigned = shelf.AssignedProduct;
+        if (assigned == null)
+        {
+            if (shelf.CurrentQuantity != 0)
+            {
+                Debug.LogWarning("BuildModeController: 상품이 없는 진열대의 수량이 0이 아니어서 저장하지 않습니다.", placed);
+                return false;
+            }
+
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(assigned.ProductId)
+            || assigned.StorageType != shelf.AcceptedStorageType
+            || shelf.CurrentQuantity < 0
+            || shelf.CurrentQuantity > shelf.Capacity)
+        {
+            Debug.LogWarning("BuildModeController: 진열 상태가 올바르지 않아 저장하지 않습니다.", placed);
+            return false;
+        }
+
+        productId = assigned.ProductId;
+        quantity = shelf.CurrentQuantity;
+        return true;
+    }
+
+    bool ReturnShelfStock(Shelf shelf)
+    {
+        if (shelf == null)
+            return false;
+
+        int quantity = shelf.CurrentQuantity;
+        if (quantity <= 0)
+            return true;
+
+        return shelf.ReturnToInventory(quantity) == quantity;
+    }
+
+    static bool TryFindCatalogProduct(ProductDefinition[] catalog, string productId, out ProductDefinition product)
+    {
+        product = null;
+        if (catalog == null || string.IsNullOrEmpty(productId))
+            return false;
+
+        for (int index = 0; index < catalog.Length; index++)
+        {
+            ProductDefinition candidate = catalog[index];
+            if (candidate == null || !string.Equals(candidate.ProductId, productId, System.StringComparison.Ordinal))
+                continue;
+
+            product = candidate;
+            return true;
+        }
+
+        return false;
     }
 
     bool IsPointerOverUI()

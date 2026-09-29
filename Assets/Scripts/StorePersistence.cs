@@ -8,7 +8,8 @@ using UnityEngine;
 public class StorePersistence : MonoBehaviour
 {
     const int LegacySaveVersion = 1;
-    const int SaveVersion = 2;
+    const int LayoutSaveVersion = 2;
+    const int SaveVersion = 3;
     const string SaveFileName = "restock_save.json";
 
     [SerializeField] StoreSession session;
@@ -211,6 +212,12 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
+        if (!TryValidateDynamicProductStates(dynamicFacilities, productsById, out string dynamicProductError))
+        {
+            Debug.LogWarning($"StorePersistence: 배치 시설의 상품 상태를 저장하지 않습니다. {dynamicProductError}", this);
+            return false;
+        }
+
         data = new StoreSaveData
         {
             version = SaveVersion,
@@ -236,7 +243,7 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        if (data.version != LegacySaveVersion && data.version != SaveVersion)
+        if (data.version != LegacySaveVersion && data.version != LayoutSaveVersion && data.version != SaveVersion)
         {
             error = $"지원하지 않는 저장 버전입니다. 파일 버전: {data.version}";
             return false;
@@ -275,9 +282,12 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        List<DynamicFacilitySaveData> dynamicFacilities = data.version == LegacySaveVersion || data.dynamicFacilities == null
+        List<DynamicFacilitySaveData> dynamicFacilities = data.version == LegacySaveVersion
+            || (data.version == LayoutSaveVersion && data.dynamicFacilities == null)
             ? new List<DynamicFacilitySaveData>()
             : data.dynamicFacilities;
+        if (data.version == LayoutSaveVersion && dynamicFacilities != null)
+            NormalizeLayoutOnlyProducts(dynamicFacilities);
         if (buildMode == null)
         {
             error = "건설 모드가 연결되지 않았습니다.";
@@ -285,6 +295,11 @@ public class StorePersistence : MonoBehaviour
         }
 
         if (!buildMode.TryValidateDynamicLayouts(dynamicFacilities, out error))
+        {
+            return false;
+        }
+
+        if (!TryValidateDynamicProductStates(dynamicFacilities, productsById, out error))
         {
             return false;
         }
@@ -535,13 +550,99 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        if (buildMode == null || !buildMode.TryReplaceDynamicLayouts(validated.dynamicFacilities))
+        if (buildMode == null || !buildMode.TryReplaceDynamicLayouts(validated.dynamicFacilities, products))
         {
             Debug.LogError("StorePersistence: 배치 시설 복원에 실패했습니다.", this);
             return false;
         }
 
         statistics.ResetDailyStatistics();
+        return true;
+    }
+
+    static void NormalizeLayoutOnlyProducts(List<DynamicFacilitySaveData> records)
+    {
+        for (int index = 0; index < records.Count; index++)
+        {
+            DynamicFacilitySaveData record = records[index];
+            if (record == null)
+                continue;
+
+            record.productId = string.Empty;
+            record.quantity = 0;
+        }
+    }
+
+    bool TryValidateDynamicProductStates(
+        List<DynamicFacilitySaveData> records,
+        Dictionary<string, ProductDefinition> productsById,
+        out string error)
+    {
+        error = string.Empty;
+        if (records == null)
+        {
+            error = "동적 시설 목록이 없습니다.";
+            return false;
+        }
+
+        for (int index = 0; index < records.Count; index++)
+        {
+            DynamicFacilitySaveData record = records[index];
+            if (record == null || !buildMode.TryGetFacilityDefinition(record.facilityId, out FacilityDefinition definition))
+            {
+                error = "동적 시설의 상품 상태를 확인할 수 없습니다.";
+                return false;
+            }
+
+            string productId = string.IsNullOrWhiteSpace(record.productId) ? string.Empty : record.productId;
+            record.productId = productId;
+            if (definition.FacilityType == FacilityType.Checkout)
+            {
+                if (productId.Length > 0 || record.quantity != 0)
+                {
+                    error = $"{definition.FacilityId}에는 상품 상태를 저장할 수 없습니다.";
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (!definition.TryGetAcceptedStorageType(out ProductStorageType storageType))
+            {
+                error = $"{definition.FacilityId}의 보관 타입을 확인하지 못했습니다.";
+                return false;
+            }
+
+            if (productId.Length == 0)
+            {
+                if (record.quantity != 0)
+                {
+                    error = $"{definition.FacilityId}의 상품이 없으면 수량은 0이어야 합니다.";
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (!productsById.TryGetValue(productId, out ProductDefinition product))
+            {
+                error = $"{definition.FacilityId}의 상품 Id {productId}를 찾지 못했습니다.";
+                return false;
+            }
+
+            if (product.StorageType != storageType)
+            {
+                error = $"{definition.FacilityId}에 {product.DisplayName}을 진열할 수 없습니다.";
+                return false;
+            }
+
+            if (record.quantity < 0 || record.quantity > product.MaxShelfCount)
+            {
+                error = $"{definition.FacilityId}의 수량 {record.quantity}이 허용 범위를 벗어났습니다.";
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -735,6 +836,8 @@ public class StorePersistence : MonoBehaviour
         public int gridX;
         public int gridY;
         public int rotationQuarterTurns;
+        public string productId;
+        public int quantity;
     }
 
     [Serializable]
