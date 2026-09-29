@@ -46,6 +46,7 @@ public class BuildModeController : MonoBehaviour
     MaterialPropertyBlock tintBlock;
 
     Transform placedRoot;
+    readonly List<PlacedFacility> placedFacilities = new List<PlacedFacility>();
     GameObject preview;
     UnityEngine.Events.UnityAction selectShelf;
     UnityEngine.Events.UnityAction selectRefrigerator;
@@ -292,15 +293,219 @@ public class BuildModeController : MonoBehaviour
 
     void PlaceSelected()
     {
-        Vector2Int footprint = CurrentFootprintSize;
-        GameObject placed = Instantiate(selected.Prefab, placedRoot);
-        placed.name = "Placed_" + selected.FacilityId + "_" + currentOrigin.x + "_" + currentOrigin.y;
-        placed.transform.rotation = PlacementRotation();
-        PlaceOnFloor(placed, FootprintCenter(currentOrigin, footprint));
+        SpawnPlacedFacility(selected, currentOrigin, rotationQuarterTurns);
+    }
+
+    public bool TryGetFacilityDefinition(string facilityId, out FacilityDefinition definition)
+    {
+        definition = null;
+        if (string.IsNullOrWhiteSpace(facilityId) || facilities == null)
+            return false;
+
+        for (int index = 0; index < facilities.Length; index++)
+        {
+            FacilityDefinition candidate = facilities[index];
+            if (candidate == null || string.IsNullOrWhiteSpace(candidate.FacilityId))
+                continue;
+            if (!string.Equals(candidate.FacilityId, facilityId, System.StringComparison.Ordinal))
+                continue;
+
+            definition = candidate;
+            return true;
+        }
+
+        return false;
+    }
+
+    public bool TryCaptureDynamicFacilities(List<StorePersistence.DynamicFacilitySaveData> results)
+    {
+        if (results == null)
+            return false;
+
+        results.Clear();
+        for (int index = 0; index < placedFacilities.Count; index++)
+        {
+            PlacedFacility placed = placedFacilities[index];
+            if (placed == null || placed.Definition == null || string.IsNullOrWhiteSpace(placed.Definition.FacilityId))
+                return false;
+
+            results.Add(new StorePersistence.DynamicFacilitySaveData
+            {
+                facilityId = placed.Definition.FacilityId,
+                gridX = placed.GridOrigin.x,
+                gridY = placed.GridOrigin.y,
+                rotationQuarterTurns = placed.RotationQuarterTurns
+            });
+        }
+
+        results.Sort(CompareDynamicFacilities);
+        return true;
+    }
+
+    public bool TryValidateDynamicLayouts(List<StorePersistence.DynamicFacilitySaveData> records, out string error)
+    {
+        error = string.Empty;
+        if (!hasGrid)
+        {
+            error = "건설 격자를 계산할 수 없습니다.";
+            return false;
+        }
+
+        if (records == null)
+        {
+            error = "동적 시설 목록이 없습니다.";
+            return false;
+        }
+
+        var occupied = new HashSet<Vector2Int>();
+        for (int index = 0; index < records.Count; index++)
+        {
+            StorePersistence.DynamicFacilitySaveData record = records[index];
+            if (!TryDescribeDynamicRecord(record, out FacilityDefinition definition, out Vector2Int origin, out Vector2Int footprint, out error))
+                return false;
+
+            if (!TryReserveFootprint(occupied, origin, footprint, definition.FacilityId, out error))
+                return false;
+
+            Vector3 center = FootprintCenter(origin, footprint);
+            if (OverlapsStaticCollider(center, footprint))
+            {
+                error = $"{definition.FacilityId} ({origin.x}, {origin.y})가 기존 시설이나 벽과 겹칩니다.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public bool TryReplaceDynamicLayouts(List<StorePersistence.DynamicFacilitySaveData> records)
+    {
+        if (records == null || !hasGrid)
+            return false;
+
+        ExitBuildMode();
+        ClearDynamicFacilities();
+        for (int index = 0; index < records.Count; index++)
+        {
+            StorePersistence.DynamicFacilitySaveData record = records[index];
+            if (!TryGetFacilityDefinition(record.facilityId, out FacilityDefinition definition) || definition.Prefab == null)
+                return false;
+
+            SpawnPlacedFacility(definition, new Vector2Int(record.gridX, record.gridY), record.rotationQuarterTurns);
+        }
+
+        return true;
+    }
+
+    PlacedFacility SpawnPlacedFacility(FacilityDefinition definition, Vector2Int origin, int quarterTurns)
+    {
+        int quarter = PlacedFacility.NormalizeQuarterTurns(quarterTurns);
+        Vector2Int footprint = RotatedGridSize(definition.GridSize, quarter);
+        GameObject placed = Instantiate(definition.Prefab, placedRoot);
+        placed.name = "Placed_" + definition.FacilityId + "_" + origin.x + "_" + origin.y;
+        placed.transform.rotation = placed.transform.rotation * Quaternion.Euler(0f, quarter * 90f, 0f);
+        PlaceOnFloor(placed, FootprintCenter(origin, footprint));
 
         PlacedFacility metadata = placed.AddComponent<PlacedFacility>();
-        metadata.Initialize(selected, currentOrigin, rotationQuarterTurns);
-        Occupy(currentOrigin, footprint);
+        metadata.Initialize(definition, origin, quarter);
+        Occupy(origin, footprint);
+        placedFacilities.Add(metadata);
+        return metadata;
+    }
+
+    void ClearDynamicFacilities()
+    {
+        for (int index = placedFacilities.Count - 1; index >= 0; index--)
+        {
+            PlacedFacility placed = placedFacilities[index];
+            if (placed != null)
+                Destroy(placed.gameObject);
+        }
+
+        placedFacilities.Clear();
+        occupiedCells.Clear();
+    }
+
+    bool TryDescribeDynamicRecord(
+        StorePersistence.DynamicFacilitySaveData record,
+        out FacilityDefinition definition,
+        out Vector2Int origin,
+        out Vector2Int footprint,
+        out string error)
+    {
+        definition = null;
+        origin = default;
+        footprint = default;
+        error = string.Empty;
+        if (record == null || string.IsNullOrWhiteSpace(record.facilityId))
+        {
+            error = "동적 시설 Id가 비어 있습니다.";
+            return false;
+        }
+
+        if (!TryGetFacilityDefinition(record.facilityId, out definition))
+        {
+            error = $"알 수 없는 시설 Id입니다. Id: {record.facilityId}";
+            return false;
+        }
+
+        if (definition.Prefab == null)
+        {
+            error = $"{record.facilityId}의 Prefab이 없습니다.";
+            return false;
+        }
+
+        if (record.rotationQuarterTurns < 0 || record.rotationQuarterTurns > 3)
+        {
+            error = $"{record.facilityId}의 회전 값은 0에서 3이어야 합니다. 현재 값: {record.rotationQuarterTurns}";
+            return false;
+        }
+
+        origin = new Vector2Int(record.gridX, record.gridY);
+        footprint = RotatedGridSize(definition.GridSize, record.rotationQuarterTurns);
+        if (!IsInsideFloor(origin, footprint))
+        {
+            error = $"{record.facilityId} ({origin.x}, {origin.y})가 바닥 밖에 있습니다.";
+            return false;
+        }
+
+        return true;
+    }
+
+    static bool TryReserveFootprint(HashSet<Vector2Int> occupied, Vector2Int origin, Vector2Int size, string facilityId, out string error)
+    {
+        error = string.Empty;
+        for (int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                Vector2Int cell = new Vector2Int(origin.x + x, origin.y + y);
+                if (!occupied.Add(cell))
+                {
+                    error = $"{facilityId} ({origin.x}, {origin.y})의 점유 칸이 다른 동적 시설과 겹칩니다.";
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    static int CompareDynamicFacilities(StorePersistence.DynamicFacilitySaveData left, StorePersistence.DynamicFacilitySaveData right)
+    {
+        int gridY = left.gridY.CompareTo(right.gridY);
+        if (gridY != 0)
+            return gridY;
+
+        int gridX = left.gridX.CompareTo(right.gridX);
+        if (gridX != 0)
+            return gridX;
+
+        int facilityId = string.Compare(left.facilityId, right.facilityId, System.StringComparison.Ordinal);
+        if (facilityId != 0)
+            return facilityId;
+
+        return left.rotationQuarterTurns.CompareTo(right.rotationQuarterTurns);
     }
 
     void TryBeginMoveFromPointer()
@@ -326,6 +531,7 @@ public class BuildModeController : MonoBehaviour
         if (!FootprintIsOccupied(origin, footprint))
             Debug.LogWarning("삭제할 시설의 점유 칸이 회전된 발자국과 일치하지 않습니다.");
 
+        placedFacilities.Remove(placed);
         Release(origin, footprint);
         Destroy(placed.gameObject);
     }
@@ -525,6 +731,36 @@ public class BuildModeController : MonoBehaviour
             if (hit == null || hit == buildSurface)
                 continue;
             if (preview != null && hit.transform.IsChildOf(preview.transform))
+                continue;
+            return true;
+        }
+
+        return false;
+    }
+
+    bool OverlapsStaticCollider(Vector3 center, Vector2Int size)
+    {
+        Vector3 boxCenter = center + Vector3.up * OverlapCenterHeight;
+        Vector3 halfExtents = new Vector3(
+            size.x * cellSize * 0.5f - OverlapPadding,
+            OverlapHalfHeight,
+            size.y * cellSize * 0.5f - OverlapPadding);
+        int count = Physics.OverlapBoxNonAlloc(
+            boxCenter,
+            halfExtents,
+            overlapHits,
+            Quaternion.identity,
+            Physics.DefaultRaycastLayers,
+            QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = overlapHits[i];
+            if (hit == null || hit == buildSurface)
+                continue;
+            if (preview != null && hit.transform.IsChildOf(preview.transform))
+                continue;
+            if (hit.GetComponentInParent<PlacedFacility>() != null)
                 continue;
             return true;
         }
