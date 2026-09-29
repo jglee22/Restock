@@ -4740,7 +4740,9 @@ MonoBehaviour:
   session: {fileID: 876268976}
   economy: {fileID: 934487145}
   storeInventory: {fileID: 1410325859}
+  storeStatistics: {fileID: 798209072}
   customerSpawner: {fileID: 1455372553}
+  navMeshSurface: {fileID: 100003}
   viewCamera: {fileID: 300003}
   buildSurface: {fileID: 110005}
   facilities:

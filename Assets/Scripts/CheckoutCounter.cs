@@ -14,6 +14,19 @@ public class CheckoutCounter : MonoBehaviour
     readonly List<CustomerMover> queue = new List<CustomerMover>();
     readonly Dictionary<CustomerMover, float> queueEnterTimes = new Dictionary<CustomerMover, float>();
     bool checkoutInProgress;
+
+    public bool BindStoreServices(StoreEconomy storeEconomy, StoreStatistics storeStatistics)
+    {
+        if (storeEconomy == null || storeStatistics == null)
+        {
+            Debug.LogWarning("CheckoutCounter: StoreEconomy 또는 StoreStatistics가 연결되지 않았습니다.", this);
+            return false;
+        }
+
+        economy = storeEconomy;
+        statistics = storeStatistics;
+        return true;
+    }
     int checkoutToken;
     bool hasWarned;
 
