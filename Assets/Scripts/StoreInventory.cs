@@ -39,6 +39,16 @@ public class StoreInventory : MonoBehaviour
 
     [SerializeField] List<InventoryEntry> entries = new List<InventoryEntry>();
 
+    public int ProductDefinitionCount => entries == null ? 0 : entries.Count;
+
+    public ProductDefinition GetProductDefinition(int index)
+    {
+        if (entries == null || index < 0 || index >= entries.Count || entries[index] == null)
+            return null;
+
+        return entries[index].Product;
+    }
+
     public int GetQuantity(ProductDefinition product)
     {
         if (product == null)
