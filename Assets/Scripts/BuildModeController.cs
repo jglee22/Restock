@@ -68,6 +68,12 @@ public class BuildModeController : MonoBehaviour
     readonly List<ProductDefinition> assignmentProducts = new List<ProductDefinition>();
     Shelf assignmentShelf;
     float cachedAgentRadius = -1f;
+    int cachedAgentTypeId = -1;
+    NavMeshQueryFilter walkableQuery;
+    bool walkableQueryReady;
+    Bounds originalBodyBounds;
+    bool hasOriginalBodyBounds;
+    readonly List<Bounds> dynamicBodyScratch = new List<Bounds>(8);
     bool warnedAccessSetup;
     GameObject preview;
     UnityEngine.Events.UnityAction selectShelf;
@@ -119,6 +125,7 @@ public class BuildModeController : MonoBehaviour
         tintBlock = new MaterialPropertyBlock();
         placedRoot = new GameObject("PlacedFacilities").transform;
         CacheGrid();
+        EnsureWalkableQuery();
         if (buildPanel != null)
             buildPanel.SetActive(false);
         if (productAssignmentPanel != null)
@@ -855,6 +862,7 @@ public class BuildModeController : MonoBehaviour
         originalQuarterTurns = placed.RotationQuarterTurns;
         originalPosition = placed.transform.position;
         originalRotation = placed.transform.rotation;
+        CaptureOriginalBody(placed);
         selected = placed.Definition;
         rotationQuarterTurns = originalQuarterTurns;
         Release(originalOrigin, RotatedGridSize(selected.GridSize, originalQuarterTurns));
@@ -894,6 +902,7 @@ public class BuildModeController : MonoBehaviour
         Occupy(origin, footprint);
 
         movingFacility = null;
+        hasOriginalBodyBounds = false;
         selected = null;
         rotationQuarterTurns = 0;
         DestroyPreview();
@@ -910,6 +919,7 @@ public class BuildModeController : MonoBehaviour
             target.transform.SetPositionAndRotation(originalPosition, originalRotation);
             Occupy(originalOrigin, RotatedGridSize(movingFacility.Definition.GridSize, originalQuarterTurns));
             movingFacility = null;
+            hasOriginalBodyBounds = false;
         }
 
         selected = null;
@@ -1019,6 +1029,8 @@ public class BuildModeController : MonoBehaviour
             return false;
         }
 
+        CollectDynamicBodyBounds();
+
         for (int index = 0; index < records.Count; index++)
         {
             StorePersistence.DynamicFacilitySaveData record = records[index];
@@ -1043,6 +1055,12 @@ public class BuildModeController : MonoBehaviour
                 if (AccessPointBlocked(accessScratch[pointIndex], radius, true))
                 {
                     error = $"{definition.FacilityId} ({origin.x}, {origin.y})의 고객 접근 지점이 기존 시설이나 벽에 막힙니다.";
+                    return false;
+                }
+
+                if (!AccessOnWalkableMesh(accessScratch[pointIndex], false, true))
+                {
+                    error = $"{definition.FacilityId} ({origin.x}, {origin.y})의 고객 접근 지점이 매장 바닥 또는 NavMesh 밖에 있습니다.";
                     return false;
                 }
             }
@@ -1170,6 +1188,8 @@ public class BuildModeController : MonoBehaviour
 
                 if (AccessPointBlocked(points[index].position, radius, false))
                     return false;
+                if (!AccessOnWalkableMesh(points[index].position, movingFacility != null, false))
+                    return false;
             }
 
             return true;
@@ -1182,7 +1202,9 @@ public class BuildModeController : MonoBehaviour
             return false;
         }
 
-        return !AccessPointBlocked(shelf.CustomerStandPoint.position, radius, false);
+        Vector3 stand = shelf.CustomerStandPoint.position;
+        return !AccessPointBlocked(stand, radius, false)
+            && AccessOnWalkableMesh(stand, movingFacility != null, false);
     }
 
     bool TryFillSavedAccess(FacilityDefinition definition, Vector2Int origin, Vector2Int footprint, int quarterTurns)
@@ -1288,24 +1310,146 @@ public class BuildModeController : MonoBehaviour
 
     float AccessClearance()
     {
-        if (cachedAgentRadius >= 0f)
-            return cachedAgentRadius;
+        if (!EnsureWalkableQuery())
+            return -1f;
+
+        return cachedAgentRadius;
+    }
+
+    bool EnsureWalkableQuery()
+    {
+        if (walkableQueryReady)
+            return true;
 
         if (navMeshSurface == null)
         {
             WarnAccessSetup("BuildModeController: NavMeshSurface가 없어 고객 접근 간격을 확인하지 못했습니다.");
-            return -1f;
+            return false;
         }
 
         NavMeshBuildSettings settings = NavMesh.GetSettingsByID(navMeshSurface.agentTypeID);
         if (settings.agentTypeID == -1)
         {
             WarnAccessSetup("BuildModeController: NavMesh Agent 설정을 찾지 못했습니다.");
-            return -1f;
+            return false;
         }
 
         cachedAgentRadius = settings.agentRadius;
-        return cachedAgentRadius;
+        cachedAgentTypeId = settings.agentTypeID;
+        walkableQuery = new NavMeshQueryFilter
+        {
+            agentTypeID = cachedAgentTypeId,
+            areaMask = NavMesh.AllAreas
+        };
+        walkableQueryReady = true;
+        return true;
+    }
+
+    bool InsideFloorBounds(Vector3 point)
+    {
+        if (!hasGrid || buildSurface == null)
+            return false;
+
+        Bounds floor = buildSurface.bounds;
+        return point.x >= floor.min.x && point.x <= floor.max.x
+            && point.z >= floor.min.z && point.z <= floor.max.z;
+    }
+
+    bool AccessOnWalkableMesh(Vector3 point, bool forgiveMovingHole, bool forgiveDynamicHoles)
+    {
+        if (!InsideFloorBounds(point))
+            return false;
+
+        if (!EnsureWalkableQuery())
+            return false;
+
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(point, out hit, cachedAgentRadius, walkableQuery))
+            return true;
+
+        if (forgiveMovingHole && hasOriginalBodyBounds && CoversExpanded(originalBodyBounds, point, cachedAgentRadius))
+            return true;
+
+        if (forgiveDynamicHoles && CoveredByDynamicBody(point, cachedAgentRadius))
+            return true;
+
+        return false;
+    }
+
+    void CaptureOriginalBody(PlacedFacility placed)
+    {
+        hasOriginalBodyBounds = false;
+        if (placed == null)
+            return;
+
+        Collider[] colliders = placed.GetComponentsInChildren<Collider>(true);
+        for (int index = 0; index < colliders.Length; index++)
+        {
+            Collider collider = colliders[index];
+            if (collider == null)
+                continue;
+
+            if (!hasOriginalBodyBounds)
+            {
+                originalBodyBounds = collider.bounds;
+                hasOriginalBodyBounds = true;
+                continue;
+            }
+
+            originalBodyBounds.Encapsulate(collider.bounds);
+        }
+    }
+
+    void CollectDynamicBodyBounds()
+    {
+        dynamicBodyScratch.Clear();
+        for (int index = 0; index < placedFacilities.Count; index++)
+        {
+            PlacedFacility placed = placedFacilities[index];
+            if (placed == null)
+                continue;
+
+            Collider[] colliders = placed.GetComponentsInChildren<Collider>(true);
+            bool any = false;
+            Bounds body = default;
+            for (int colliderIndex = 0; colliderIndex < colliders.Length; colliderIndex++)
+            {
+                Collider collider = colliders[colliderIndex];
+                if (collider == null)
+                    continue;
+
+                if (!any)
+                {
+                    body = collider.bounds;
+                    any = true;
+                    continue;
+                }
+
+                body.Encapsulate(collider.bounds);
+            }
+
+            if (any)
+                dynamicBodyScratch.Add(body);
+        }
+    }
+
+    bool CoveredByDynamicBody(Vector3 point, float padding)
+    {
+        for (int index = 0; index < dynamicBodyScratch.Count; index++)
+        {
+            if (CoversExpanded(dynamicBodyScratch[index], point, padding))
+                return true;
+        }
+
+        return false;
+    }
+
+    static bool CoversExpanded(Bounds bounds, Vector3 point, float padding)
+    {
+        return point.x >= bounds.min.x - padding
+            && point.x <= bounds.max.x + padding
+            && point.z >= bounds.min.z - padding
+            && point.z <= bounds.max.z + padding;
     }
 
     void WarnAccessSetup(string message)
