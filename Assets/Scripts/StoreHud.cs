@@ -47,6 +47,7 @@ public class StoreHud : MonoBehaviour
     int displayedVisitors = int.MinValue;
     int displayedPurchasingCustomers = int.MinValue;
     int displayedItemsSold = int.MinValue;
+    int displayedCheckoutWaitSamples = int.MinValue;
     bool hasWarned;
 
     void Awake()
@@ -196,6 +197,7 @@ public class StoreHud : MonoBehaviour
         int visitors = statistics != null ? statistics.VisitorCount : 0;
         int purchasingCustomers = statistics != null ? statistics.PurchasingCustomerCount : 0;
         int itemsSold = statistics != null ? statistics.ItemsSold : 0;
+        int checkoutWaitSamples = statistics != null ? statistics.CheckoutWaitSampleCount : 0;
         if (statistics == null)
         {
             WarnOnce("StoreHud: StoreStatistics가 연결되지 않아 판매 통계를 표시할 수 없습니다.");
@@ -206,7 +208,8 @@ public class StoreHud : MonoBehaviour
             && displayedExpense == economy.DailyExpense
             && displayedVisitors == visitors
             && displayedPurchasingCustomers == purchasingCustomers
-            && displayedItemsSold == itemsSold)
+            && displayedItemsSold == itemsSold
+            && displayedCheckoutWaitSamples == checkoutWaitSamples)
         {
             return;
         }
@@ -217,7 +220,9 @@ public class StoreHud : MonoBehaviour
         displayedVisitors = visitors;
         displayedPurchasingCustomers = purchasingCustomers;
         displayedItemsSold = itemsSold;
+        displayedCheckoutWaitSamples = checkoutWaitSamples;
         int averageTransaction = AverageTransactionValue(displayedRevenue, purchasingCustomers);
+        float averageCheckoutWait = statistics != null ? statistics.AverageCheckoutWaitSeconds : 0f;
         var builder = new StringBuilder();
         builder.Append(session.DayLabel).Append(" 종료\n");
         builder.Append("오늘 매출 ").Append(FormatWon(displayedRevenue)).Append('\n');
@@ -227,6 +232,7 @@ public class StoreHud : MonoBehaviour
         builder.Append("구매 고객 ").Append(purchasingCustomers.ToString(CultureInfo.InvariantCulture)).Append("명\n");
         builder.Append("판매 상품 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture)).Append("개\n");
         builder.Append("평균 객단가 ").Append(FormatWon(averageTransaction)).Append('\n');
+        builder.Append("평균 계산 대기 ").Append(FormatCheckoutWait(averageCheckoutWait)).Append('\n');
         builder.Append("구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append("\n\n");
         builder.Append("상품별 판매");
         if (statistics != null)
@@ -280,6 +286,22 @@ public class StoreHud : MonoBehaviour
             1,
             System.MidpointRounding.AwayFromZero);
         return percent.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+    }
+
+    static string FormatCheckoutWait(float seconds)
+    {
+        if (float.IsNaN(seconds) || float.IsInfinity(seconds) || seconds <= 0f)
+        {
+            return "0초";
+        }
+
+        long tenths = (long)System.Math.Round(seconds * 10d, System.MidpointRounding.AwayFromZero);
+        if (tenths % 10 == 0)
+        {
+            return (tenths / 10).ToString(CultureInfo.InvariantCulture) + "초";
+        }
+
+        return (tenths / 10d).ToString("0.0", CultureInfo.InvariantCulture) + "초";
     }
 
     static string FormatWon(int amount)

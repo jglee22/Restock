@@ -12,6 +12,7 @@ public class CheckoutCounter : MonoBehaviour
     [SerializeField] float checkoutDuration = 1.5f;
 
     readonly List<CustomerMover> queue = new List<CustomerMover>();
+    readonly Dictionary<CustomerMover, float> queueEnterTimes = new Dictionary<CustomerMover, float>();
     bool checkoutInProgress;
     int checkoutToken;
     bool hasWarned;
@@ -42,6 +43,8 @@ public class CheckoutCounter : MonoBehaviour
         }
 
         queue.Add(customer);
+        // 이동을 시작한 시각이 아니라, 줄 등록이 성공한 시각부터 잰다.
+        queueEnterTimes[customer] = Time.time;
         UpdateQueueTargets();
         return true;
     }
@@ -55,6 +58,8 @@ public class CheckoutCounter : MonoBehaviour
 
         checkoutInProgress = true;
         int token = checkoutToken;
+        // 계산 연출 1.5초는 대기시간에 넣지 않는다. 시작에 성공한 순간에 한 번만 확정한다.
+        RecordQueueWait(customer);
         customer.NotifyCheckoutStarted();
         StartCoroutine(FinishCheckout(customer, token));
         return true;
@@ -62,6 +67,11 @@ public class CheckoutCounter : MonoBehaviour
 
     public void ReleaseCustomer(CustomerMover customer)
     {
+        if (customer != null)
+        {
+            queueEnterTimes.Remove(customer);
+        }
+
         int index = queue.IndexOf(customer);
         if (index < 0)
         {
@@ -98,6 +108,23 @@ public class CheckoutCounter : MonoBehaviour
             RecordCompletedSale(customer);
             customer.NotifyCheckoutCompleted();
         }
+    }
+
+    void RecordQueueWait(CustomerMover customer)
+    {
+        if (!queueEnterTimes.TryGetValue(customer, out float enteredAt))
+        {
+            return;
+        }
+
+        queueEnterTimes.Remove(customer);
+        if (statistics == null)
+        {
+            WarnOnce("CheckoutCounter: StoreStatistics가 연결되지 않아 계산 대기 시간을 기록하지 못했습니다.");
+            return;
+        }
+
+        statistics.RecordCheckoutWait(Time.time - enteredAt);
     }
 
     void RecordCompletedSale(CustomerMover customer)

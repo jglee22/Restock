@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 하루 동안의 방문 고객과 판매 수량만 기록한다.
+// 하루 동안의 방문, 판매, 계산 대기 시간만 기록한다.
 // 보유 자금과 매출 금액은 StoreEconomy가 가진다.
 public class StoreStatistics : MonoBehaviour
 {
@@ -11,6 +11,8 @@ public class StoreStatistics : MonoBehaviour
     [SerializeField] int visitorCount;
     [SerializeField] int purchasingCustomerCount;
     [SerializeField] int itemsSold;
+    [SerializeField] float totalCheckoutWaitSeconds;
+    [SerializeField] int checkoutWaitSampleCount;
     [SerializeField] List<ProductDailyStatistic> productStatistics = new List<ProductDailyStatistic>();
 
     readonly Dictionary<ProductDefinition, ProductDailyStatistic> statisticsByProduct =
@@ -21,6 +23,21 @@ public class StoreStatistics : MonoBehaviour
     public int VisitorCount => visitorCount;
     public int PurchasingCustomerCount => purchasingCustomerCount;
     public int ItemsSold => itemsSold;
+    public float TotalCheckoutWaitSeconds => totalCheckoutWaitSeconds;
+    public int CheckoutWaitSampleCount => checkoutWaitSampleCount;
+
+    public float AverageCheckoutWaitSeconds
+    {
+        get
+        {
+            if (checkoutWaitSampleCount <= 0)
+            {
+                return 0f;
+            }
+
+            return totalCheckoutWaitSeconds / checkoutWaitSampleCount;
+        }
+    }
     public int TrackedProductCount => trackedProducts == null ? 0 : trackedProducts.Length;
 
     void Awake()
@@ -105,6 +122,31 @@ public class StoreStatistics : MonoBehaviour
         }
     }
 
+    public void RecordCheckoutWait(float waitSeconds)
+    {
+        if (float.IsNaN(waitSeconds) || float.IsInfinity(waitSeconds) || waitSeconds < 0f)
+        {
+            Debug.LogWarning($"StoreStatistics: 계산 대기 시간이 올바르지 않아 기록하지 않습니다. 값: {waitSeconds}", this);
+            return;
+        }
+
+        if (checkoutWaitSampleCount == int.MaxValue)
+        {
+            Debug.LogWarning("StoreStatistics: 계산 대기 표본 수가 표현 범위를 넘어 기록하지 않습니다.", this);
+            return;
+        }
+
+        float nextTotal = totalCheckoutWaitSeconds + waitSeconds;
+        if (float.IsInfinity(nextTotal))
+        {
+            Debug.LogWarning("StoreStatistics: 계산 대기 시간 합이 표현 범위를 넘어 기록하지 않습니다.", this);
+            return;
+        }
+
+        totalCheckoutWaitSeconds = nextTotal;
+        checkoutWaitSampleCount += 1;
+    }
+
     public bool TryGetTrackedProductSales(
         int index,
         out ProductDefinition product,
@@ -144,6 +186,8 @@ public class StoreStatistics : MonoBehaviour
         visitorCount = 0;
         purchasingCustomerCount = 0;
         itemsSold = 0;
+        totalCheckoutWaitSeconds = 0f;
+        checkoutWaitSampleCount = 0;
         warnedUntrackedProducts.Clear();
         productStatistics.Clear();
         statisticsByProduct.Clear();
