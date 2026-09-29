@@ -48,6 +48,18 @@ public class Shelf : MonoBehaviour
         return true;
     }
 
+    public bool BindInventory(StoreInventory inventory)
+    {
+        if (inventory == null)
+        {
+            Debug.LogWarning("Shelf: StoreInventory가 연결되지 않았습니다.", this);
+            return false;
+        }
+
+        storeInventory = inventory;
+        return true;
+    }
+
     public bool TryRestoreState(ProductDefinition product, int quantity)
     {
         if (quantity < 0)

@@ -24,6 +24,85 @@ public class CustomerSpawner : MonoBehaviour
 
     public int ActiveCustomerCount => activeCustomerCount;
 
+    public void RegisterShoppingShelf(Shelf shelf)
+    {
+        if (shelf == null)
+        {
+            return;
+        }
+
+        if (ContainsShoppingShelf(shelf))
+        {
+            return;
+        }
+
+        int oldLength = shoppingShelves == null ? 0 : shoppingShelves.Length;
+        Shelf[] next = new Shelf[oldLength + 1];
+        for (int index = 0; index < oldLength; index++)
+        {
+            next[index] = shoppingShelves[index];
+        }
+
+        next[oldLength] = shelf;
+        shoppingShelves = next;
+    }
+
+    public void UnregisterShoppingShelf(Shelf shelf)
+    {
+        if (shelf == null || shoppingShelves == null)
+        {
+            return;
+        }
+
+        int found = -1;
+        for (int index = 0; index < shoppingShelves.Length; index++)
+        {
+            if (shoppingShelves[index] == shelf)
+            {
+                found = index;
+                break;
+            }
+        }
+
+        if (found < 0)
+        {
+            return;
+        }
+
+        Shelf[] next = new Shelf[shoppingShelves.Length - 1];
+        int write = 0;
+        for (int index = 0; index < shoppingShelves.Length; index++)
+        {
+            if (index == found)
+            {
+                continue;
+            }
+
+            next[write] = shoppingShelves[index];
+            write += 1;
+        }
+
+        shoppingShelves = next;
+    }
+
+    bool ContainsShoppingShelf(Shelf shelf)
+    {
+        if (shoppingShelves == null)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < shoppingShelves.Length; index++)
+        {
+            if (shoppingShelves[index] == shelf)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     void Update()
     {
         if (session == null || session.Phase != StorePhase.Open)

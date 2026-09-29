@@ -29,6 +29,8 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] float cellSize = DefaultCellSize;
     [SerializeField] StoreSession session;
     [SerializeField] StoreEconomy economy;
+    [SerializeField] StoreInventory storeInventory;
+    [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] Camera viewCamera;
     [SerializeField] Collider buildSurface;
     [SerializeField] FacilityDefinition[] facilities;
@@ -143,6 +145,10 @@ public class BuildModeController : MonoBehaviour
     {
         if (economy == null)
             Debug.LogWarning("BuildModeController: StoreEconomy가 연결되지 않았습니다.", this);
+        if (storeInventory == null)
+            Debug.LogWarning("BuildModeController: StoreInventory가 연결되지 않았습니다.", this);
+        if (customerSpawner == null)
+            Debug.LogWarning("BuildModeController: CustomerSpawner가 연결되지 않았습니다.", this);
     }
 
     void Update()
@@ -441,7 +447,55 @@ public class BuildModeController : MonoBehaviour
         metadata.Initialize(definition, origin, quarter);
         Occupy(origin, footprint);
         placedFacilities.Add(metadata);
+        RegisterFacilityRuntimeDependencies(metadata);
         return metadata;
+    }
+
+    void RegisterFacilityRuntimeDependencies(PlacedFacility placed)
+    {
+        if (!TryGetShoppingShelf(placed, out Shelf shelf))
+            return;
+
+        if (storeInventory == null)
+        {
+            Debug.LogWarning("BuildModeController: StoreInventory가 없어 진열대를 연결하지 못했습니다.", this);
+            return;
+        }
+
+        shelf.BindInventory(storeInventory);
+        if (customerSpawner == null)
+        {
+            Debug.LogWarning("BuildModeController: CustomerSpawner가 없어 진열대를 등록하지 못했습니다.", this);
+            return;
+        }
+
+        customerSpawner.RegisterShoppingShelf(shelf);
+    }
+
+    void UnregisterFacilityRuntimeDependencies(PlacedFacility placed)
+    {
+        if (!TryGetShoppingShelf(placed, out Shelf shelf) || customerSpawner == null)
+            return;
+
+        customerSpawner.UnregisterShoppingShelf(shelf);
+    }
+
+    static bool TryGetShoppingShelf(PlacedFacility placed, out Shelf shelf)
+    {
+        shelf = null;
+        if (placed == null || placed.Definition == null)
+            return false;
+
+        FacilityType facilityType = placed.Definition.FacilityType;
+        if (facilityType != FacilityType.Shelf && facilityType != FacilityType.Refrigerator)
+            return false;
+
+        shelf = placed.GetComponent<Shelf>();
+        if (shelf != null)
+            return true;
+
+        Debug.LogWarning($"BuildModeController: {placed.Definition.FacilityId}에 Shelf가 없어 쇼핑 목록에 넣지 못했습니다.", placed);
+        return false;
     }
 
     void ClearDynamicFacilities()
@@ -449,8 +503,11 @@ public class BuildModeController : MonoBehaviour
         for (int index = placedFacilities.Count - 1; index >= 0; index--)
         {
             PlacedFacility placed = placedFacilities[index];
-            if (placed != null)
-                Destroy(placed.gameObject);
+            if (placed == null)
+                continue;
+
+            UnregisterFacilityRuntimeDependencies(placed);
+            Destroy(placed.gameObject);
         }
 
         placedFacilities.Clear();
@@ -563,6 +620,7 @@ public class BuildModeController : MonoBehaviour
             Debug.LogWarning("삭제할 시설의 점유 칸이 회전된 발자국과 일치하지 않습니다.");
 
         int cost = placed.Definition.Cost;
+        UnregisterFacilityRuntimeDependencies(placed);
         placedFacilities.Remove(placed);
         Release(origin, footprint);
         Destroy(placed.gameObject);
