@@ -59,6 +59,7 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] Button closeProductButton;
     [SerializeField] Button exitButton;
     [SerializeField] StoreHud storeHud;
+    StorePresentationFeedback presentation;
     [SerializeField] TMP_Text buildStatusText;
 
     readonly Collider[] overlapHits = new Collider[32];
@@ -290,8 +291,7 @@ public class BuildModeController : MonoBehaviour
         rotationQuarterTurns = 0;
         if (storeHud != null)
             storeHud.CloseWorkPanels();
-        if (buildPanel != null)
-            buildPanel.SetActive(true);
+        SetPresentedPanel(buildPanel, true);
         shownStatusTool = (BuildToolMode)(-1);
         UpdateBuildStatus();
     }
@@ -308,8 +308,7 @@ public class BuildModeController : MonoBehaviour
         movingFacility = null;
         DestroyPreview();
         CloseProductSelection();
-        if (buildPanel != null)
-            buildPanel.SetActive(false);
+        SetPresentedPanel(buildPanel, false);
     }
 
     public void BeginMoveSelect()
@@ -407,6 +406,7 @@ public class BuildModeController : MonoBehaviour
             return;
 
         SpawnPlacedFacility(selected, currentOrigin, rotationQuarterTurns);
+        PlayBurst(FootprintCenter(currentOrigin, footprint));
         RequestNavMeshRefresh();
     }
 
@@ -850,6 +850,7 @@ public class BuildModeController : MonoBehaviour
         placedFacilities.Remove(placed);
         Release(origin, footprint);
         Destroy(placed.gameObject);
+        PlayBurst(placed.transform.position);
         RequestNavMeshRefresh();
         if (cost < 0)
             return;
@@ -943,6 +944,7 @@ public class BuildModeController : MonoBehaviour
         rotationQuarterTurns = 0;
         DestroyPreview();
         toolMode = BuildToolMode.MoveSelect;
+        PlayBurst(position);
         RequestNavMeshRefresh();
     }
 
@@ -1652,8 +1654,7 @@ public class BuildModeController : MonoBehaviour
         assignmentShelf = shelf;
         RefreshProductOptions();
         RefreshProductStatus();
-        if (productAssignmentPanel != null)
-            productAssignmentPanel.SetActive(true);
+        SetPresentedPanel(productAssignmentPanel, true);
     }
 
     void ApplySelectedProduct()
@@ -1697,8 +1698,7 @@ public class BuildModeController : MonoBehaviour
         assignmentProducts.Clear();
         if (productDropdown != null)
             productDropdown.ClearOptions();
-        if (productAssignmentPanel != null)
-            productAssignmentPanel.SetActive(false);
+        SetPresentedPanel(productAssignmentPanel, false);
     }
 
     void RefreshProductOptions()
@@ -1919,5 +1919,47 @@ public class BuildModeController : MonoBehaviour
         uiHits.Clear();
         EventSystem.current.RaycastAll(data, uiHits);
         return uiHits.Count > 0;
+    }
+
+    void PlayBurst(Vector3 position)
+    {
+        StorePresentationFeedback feedback = Presentation();
+        if (feedback != null)
+        {
+            feedback.PlayBurst(position);
+        }
+    }
+
+    void SetPresentedPanel(GameObject panel, bool open)
+    {
+        StorePresentationFeedback feedback = Presentation();
+        if (feedback == null)
+        {
+            if (panel != null)
+            {
+                panel.SetActive(open);
+            }
+
+            return;
+        }
+
+        if (open)
+        {
+            feedback.Show(panel);
+        }
+        else
+        {
+            feedback.Hide(panel);
+        }
+    }
+
+    StorePresentationFeedback Presentation()
+    {
+        if (presentation == null)
+        {
+            presentation = FindFirstObjectByType<StorePresentationFeedback>();
+        }
+
+        return presentation;
     }
 }

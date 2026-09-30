@@ -16,6 +16,7 @@ public class CheckoutCounter : MonoBehaviour
     readonly List<CustomerMover> queue = new List<CustomerMover>();
     readonly Dictionary<CustomerMover, float> queueEnterTimes = new Dictionary<CustomerMover, float>();
     bool checkoutInProgress;
+    StorePresentationFeedback presentation;
 
     public IReadOnlyList<Transform> QueuePoints => queuePoints;
 
@@ -223,6 +224,8 @@ public class CheckoutCounter : MonoBehaviour
             economy.RecordSale(item.Product, item.UnitPrice);
         }
 
+        PlayCheckoutBurst();
+
         if (statistics == null)
         {
             WarnOnce("CheckoutCounter: StoreStatistics가 연결되지 않아 구매 통계를 기록하지 못했습니다.");
@@ -295,5 +298,18 @@ public class CheckoutCounter : MonoBehaviour
 
         hasWarned = true;
         Debug.LogWarning(message, this);
+    }
+
+    void PlayCheckoutBurst()
+    {
+        if (presentation == null)
+        {
+            presentation = FindFirstObjectByType<StorePresentationFeedback>();
+        }
+
+        if (presentation != null)
+        {
+            presentation.PlayBurst(transform.position);
+        }
     }
 }
