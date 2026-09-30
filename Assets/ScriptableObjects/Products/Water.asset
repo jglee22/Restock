@@ -21,4 +21,4 @@ MonoBehaviour:
   maxShelfCount: 10
   popularity: 0.8
   icon: {fileID: 0}
-  productPrefab: {fileID: 0}
+  productPrefab: {fileID: 6027144467258870997, guid: a664c7e5c6818a44f911de6bcf964f4c, type: 3}
