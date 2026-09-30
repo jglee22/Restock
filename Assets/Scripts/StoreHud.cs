@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 // 기존 Day/Time TMP와 Phase 1 버튼을 StoreSession 상태에 맞춘다.
@@ -14,6 +15,11 @@ public class StoreHud : MonoBehaviour
     [SerializeField] StorePersistence persistence;
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] StoreEventSystem eventSystem;
+    [SerializeField] StoreUpgradeSystem upgradeSystem;
+    [SerializeField] Button upgradeButton;
+    [SerializeField] GameObject upgradePanel;
+    [SerializeField] Button upgradeCloseButton;
+    [SerializeField] UpgradeRowWidgets[] upgradeRows;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
     [SerializeField] TMP_Text phaseText;
@@ -52,6 +58,10 @@ public class StoreHud : MonoBehaviour
     int displayedCheckoutWaitSamples = int.MinValue;
     int displayedStockoutCount = int.MinValue;
     bool hasWarned;
+    bool upgradeRowsDirty = true;
+    int displayedUpgradeMoney = int.MinValue;
+    int[] shownUpgradeLevels = new int[3];
+    UnityEngine.Events.UnityAction[] upgradeBuyActions;
 
     void Awake()
     {
@@ -79,6 +89,9 @@ public class StoreHud : MonoBehaviour
         Bind(restockShelvesButton, OnRestockShelves);
         Bind(saveButton, OnSave);
         Bind(loadButton, OnLoad);
+        Bind(upgradeButton, OnOpenUpgradePanel);
+        Bind(upgradeCloseButton, OnCloseUpgradePanel);
+        BindUpgradeRows();
     }
 
     void Start()
@@ -99,10 +112,18 @@ public class StoreHud : MonoBehaviour
         Unbind(restockShelvesButton, OnRestockShelves);
         Unbind(saveButton, OnSave);
         Unbind(loadButton, OnLoad);
+        Unbind(upgradeButton, OnOpenUpgradePanel);
+        Unbind(upgradeCloseButton, OnCloseUpgradePanel);
+        UnbindUpgradeRows();
     }
 
     void Update()
     {
+        if (upgradePanel != null && upgradePanel.activeSelf && WasEscapePressed())
+        {
+            OnCloseUpgradePanel();
+        }
+
         Refresh(forceVisibility: false);
     }
 
@@ -120,6 +141,12 @@ public class StoreHud : MonoBehaviour
         RefreshEvent();
         RefreshMoney();
         RefreshLoadButton();
+        if (session.Phase != StorePhase.Preparation)
+        {
+            SetObjectVisible(upgradePanel, false);
+        }
+
+        RefreshUpgradePanel(false);
 
         if (session.Phase == StorePhase.Result)
         {
@@ -146,6 +173,11 @@ public class StoreHud : MonoBehaviour
         SetObjectVisible(pricePanel, session.Phase == StorePhase.Preparation);
         SetButtonVisible(restockShelvesButton, session.Phase == StorePhase.Preparation || session.Phase == StorePhase.Open);
         SetObjectVisible(saveLoadPanel, session.Phase == StorePhase.Preparation);
+        SetButtonVisible(upgradeButton, session.Phase == StorePhase.Preparation);
+        if (session.Phase != StorePhase.Preparation)
+        {
+            SetObjectVisible(upgradePanel, false);
+        }
     }
 
     void RefreshLoadButton()
@@ -522,6 +554,150 @@ public class StoreHud : MonoBehaviour
         }
     }
 
+    void OnOpenUpgradePanel()
+    {
+        if (session == null || session.Phase != StorePhase.Preparation || upgradePanel == null)
+        {
+            return;
+        }
+
+        upgradeRowsDirty = true;
+        upgradePanel.SetActive(true);
+        RefreshUpgradePanel(true);
+    }
+
+    void OnCloseUpgradePanel()
+    {
+        SetObjectVisible(upgradePanel, false);
+    }
+
+    void OnBuyUpgrade(int rowIndex)
+    {
+        if (upgradeSystem == null || upgradeRows == null || rowIndex < 0 || rowIndex >= upgradeRows.Length)
+        {
+            return;
+        }
+
+        upgradeSystem.TryPurchase(upgradeRows[rowIndex].type);
+        upgradeRowsDirty = true;
+        RefreshUpgradePanel(true);
+    }
+
+    void BindUpgradeRows()
+    {
+        if (upgradeRows == null)
+        {
+            return;
+        }
+
+        upgradeBuyActions = new UnityEngine.Events.UnityAction[upgradeRows.Length];
+        for (int index = 0; index < upgradeRows.Length; index++)
+        {
+            int captured = index;
+            upgradeBuyActions[index] = () => OnBuyUpgrade(captured);
+            Bind(upgradeRows[index].buyButton, upgradeBuyActions[index]);
+        }
+    }
+
+    void UnbindUpgradeRows()
+    {
+        if (upgradeRows == null || upgradeBuyActions == null)
+        {
+            return;
+        }
+
+        int count = upgradeRows.Length < upgradeBuyActions.Length ? upgradeRows.Length : upgradeBuyActions.Length;
+        for (int index = 0; index < count; index++)
+        {
+            Unbind(upgradeRows[index].buyButton, upgradeBuyActions[index]);
+        }
+    }
+
+    void RefreshUpgradePanel(bool force)
+    {
+        if (upgradePanel == null || !upgradePanel.activeSelf || upgradeSystem == null || upgradeRows == null)
+        {
+            return;
+        }
+
+        int money = economy != null ? economy.CurrentMoney : int.MinValue;
+        if (!force && !upgradeRowsDirty && money == displayedUpgradeMoney)
+        {
+            bool sameLevels = true;
+            for (int index = 0; index < upgradeRows.Length; index++)
+            {
+                if (upgradeSystem.GetLevel(upgradeRows[index].type) != LastShownLevel(index))
+                {
+                    sameLevels = false;
+                    break;
+                }
+            }
+
+            if (sameLevels)
+            {
+                return;
+            }
+        }
+
+        displayedUpgradeMoney = money;
+        upgradeRowsDirty = false;
+        if (shownUpgradeLevels == null || shownUpgradeLevels.Length != upgradeRows.Length)
+        {
+            shownUpgradeLevels = new int[upgradeRows.Length];
+        }
+
+        for (int index = 0; index < upgradeRows.Length; index++)
+        {
+            UpgradeRowWidgets row = upgradeRows[index];
+            StoreUpgradeType type = row.type;
+            int level = upgradeSystem.GetLevel(type);
+            int maxLevel = upgradeSystem.GetMaxLevel(type);
+            shownUpgradeLevels[index] = level;
+            SetText(row.titleText, upgradeSystem.GetDisplayName(type));
+            SetText(row.levelText, "Lv " + level.ToString(CultureInfo.InvariantCulture) + " / " + maxLevel.ToString(CultureInfo.InvariantCulture));
+            SetText(row.effectText, UpgradeEffectLabel(type));
+            if (upgradeSystem.TryGetNextCost(type, out int cost))
+            {
+                SetText(row.costText, "다음 비용: " + FormatWon(cost));
+            }
+            else
+            {
+                SetText(row.costText, "다음 비용: MAX");
+            }
+
+            SetButtonInteractable(row.buyButton, upgradeSystem.CanPurchase(type));
+        }
+    }
+
+    int LastShownLevel(int index)
+    {
+        if (shownUpgradeLevels == null || index < 0 || index >= shownUpgradeLevels.Length)
+        {
+            return int.MinValue;
+        }
+
+        return shownUpgradeLevels[index];
+    }
+
+    static string UpgradeEffectLabel(StoreUpgradeType type)
+    {
+        switch (type)
+        {
+            case StoreUpgradeType.FastCheckout:
+                return "계산 시간 -10% / Lv";
+            case StoreUpgradeType.Advertising:
+                return "구매 확률 +10% / Lv";
+            default:
+                return "고객 방문 간격 -10% / Lv";
+        }
+    }
+
+    static bool WasEscapePressed()
+    {
+        Keyboard keyboard = Keyboard.current;
+        return keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+    }
+
     void WarnOnce(string message)
     {
         if (hasWarned)
@@ -555,5 +731,16 @@ public class StoreHud : MonoBehaviour
         {
             target.SetActive(visible);
         }
+    }
+
+    [System.Serializable]
+    public class UpgradeRowWidgets
+    {
+        public StoreUpgradeType type;
+        public TMP_Text titleText;
+        public TMP_Text levelText;
+        public TMP_Text effectText;
+        public TMP_Text costText;
+        public Button buyButton;
     }
 }

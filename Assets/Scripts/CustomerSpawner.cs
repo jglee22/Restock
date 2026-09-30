@@ -15,6 +15,7 @@ public class CustomerSpawner : MonoBehaviour
     [SerializeField] StorePricing storePricing;
     [SerializeField] StoreStatistics storeStatistics;
     [SerializeField] StoreEventSystem eventSystem;
+    [SerializeField] StoreUpgradeSystem upgradeSystem;
     [SerializeField] CustomerDefinition[] customerDefinitions;
     [SerializeField] float spawnInterval = 4f;
     [SerializeField] int maxActiveCustomers = 5;
@@ -34,12 +35,17 @@ public class CustomerSpawner : MonoBehaviour
     {
         get
         {
-            if (eventSystem == null)
+            float interval = spawnInterval;
+            if (eventSystem != null)
             {
-                return spawnInterval;
+                interval *= eventSystem.SpawnIntervalMultiplier;
             }
 
-            float interval = spawnInterval * eventSystem.SpawnIntervalMultiplier;
+            if (upgradeSystem != null)
+            {
+                interval *= upgradeSystem.SpawnIntervalMultiplier;
+            }
+
             if (interval <= 0f)
             {
                 WarnOnce($"CustomerSpawner: 적용 Spawn Interval이 0 이하입니다. 기본값 {spawnInterval}초를 사용합니다.");
@@ -282,8 +288,13 @@ public class CustomerSpawner : MonoBehaviour
             WarnOnce("CustomerSpawner: StoreEventSystem이 연결되지 않았습니다.");
         }
 
+        if (upgradeSystem == null)
+        {
+            WarnOnce("CustomerSpawner: StoreUpgradeSystem이 연결되지 않았습니다.");
+        }
+
         activeCustomerCount += 1;
-        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, selectedCheckout, storePricing, definition, eventSystem);
+        customer.Begin(this, insidePoint, exitPoint, shoppingShelves, browseDuration, selectedCheckout, storePricing, definition, eventSystem, upgradeSystem);
         if (storeStatistics == null)
         {
             WarnOnce("CustomerSpawner: StoreStatistics가 연결되지 않아 방문 고객을 기록하지 못했습니다.");

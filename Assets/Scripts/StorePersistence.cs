@@ -9,7 +9,8 @@ public class StorePersistence : MonoBehaviour
 {
     const int LegacySaveVersion = 1;
     const int LayoutSaveVersion = 2;
-    const int SaveVersion = 3;
+    const int ProductSaveVersion = 3;
+    const int SaveVersion = 4;
     const string SaveFileName = "restock_save.json";
 
     [SerializeField] StoreSession session;
@@ -20,6 +21,7 @@ public class StorePersistence : MonoBehaviour
     [SerializeField] ProductDefinition[] products;
     [SerializeField] Shelf[] shelves;
     [SerializeField] BuildModeController buildMode;
+    [SerializeField] StoreUpgradeSystem upgradeSystem;
 
     public bool SaveFileExists => File.Exists(SaveFilePath);
 
@@ -218,6 +220,12 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
+        if (upgradeSystem == null)
+        {
+            Debug.LogWarning("StorePersistence: StoreUpgradeSystem이 연결되지 않아 저장하지 않습니다.", this);
+            return false;
+        }
+
         data = new StoreSaveData
         {
             version = SaveVersion,
@@ -228,7 +236,10 @@ public class StorePersistence : MonoBehaviour
             inventory = inventoryEntries,
             shelves = shelfEntries,
             prices = priceEntries,
-            dynamicFacilities = dynamicFacilities
+            dynamicFacilities = dynamicFacilities,
+            checkoutUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.FastCheckout),
+            advertisingUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.Advertising),
+            trafficUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.WordOfMouth)
         };
         return true;
     }
@@ -243,7 +254,10 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        if (data.version != LegacySaveVersion && data.version != LayoutSaveVersion && data.version != SaveVersion)
+        if (data.version != LegacySaveVersion
+            && data.version != LayoutSaveVersion
+            && data.version != ProductSaveVersion
+            && data.version != SaveVersion)
         {
             error = $"지원하지 않는 저장 버전입니다. 파일 버전: {data.version}";
             return false;
@@ -304,6 +318,28 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
+        int checkoutUpgradeLevel = 0;
+        int advertisingUpgradeLevel = 0;
+        int trafficUpgradeLevel = 0;
+        if (data.version == SaveVersion)
+        {
+            if (upgradeSystem == null)
+            {
+                error = "업그레이드가 연결되지 않았습니다.";
+                return false;
+            }
+
+            checkoutUpgradeLevel = data.checkoutUpgradeLevel;
+            advertisingUpgradeLevel = data.advertisingUpgradeLevel;
+            trafficUpgradeLevel = data.trafficUpgradeLevel;
+            if (!IsUpgradeLevelValid(StoreUpgradeType.FastCheckout, checkoutUpgradeLevel, out error)
+                || !IsUpgradeLevelValid(StoreUpgradeType.Advertising, advertisingUpgradeLevel, out error)
+                || !IsUpgradeLevelValid(StoreUpgradeType.WordOfMouth, trafficUpgradeLevel, out error))
+            {
+                return false;
+            }
+        }
+
         validated = new ValidatedSave
         {
             day = data.day,
@@ -314,7 +350,10 @@ public class StorePersistence : MonoBehaviour
             prices = priceValues,
             shelfProducts = assignedProducts,
             shelfQuantities = shelfQuantities,
-            dynamicFacilities = dynamicFacilities
+            dynamicFacilities = dynamicFacilities,
+            checkoutUpgradeLevel = checkoutUpgradeLevel,
+            advertisingUpgradeLevel = advertisingUpgradeLevel,
+            trafficUpgradeLevel = trafficUpgradeLevel
         };
         return true;
     }
@@ -514,6 +553,16 @@ public class StorePersistence : MonoBehaviour
         if (!economy.TryRestoreState(validated.currentMoney, validated.dailyRevenue, validated.dailyExpense))
         {
             Debug.LogError("StorePersistence: 경제 상태 복원에 실패했습니다.", this);
+            return false;
+        }
+
+        if (upgradeSystem == null
+            || !upgradeSystem.TryRestoreLevels(
+                validated.checkoutUpgradeLevel,
+                validated.advertisingUpgradeLevel,
+                validated.trafficUpgradeLevel))
+        {
+            Debug.LogError("StorePersistence: 업그레이드 복원에 실패했습니다.", this);
             return false;
         }
 
@@ -827,6 +876,9 @@ public class StorePersistence : MonoBehaviour
         public List<ShelfSaveData> shelves;
         public List<ProductPriceSaveData> prices;
         public List<DynamicFacilitySaveData> dynamicFacilities;
+        public int checkoutUpgradeLevel;
+        public int advertisingUpgradeLevel;
+        public int trafficUpgradeLevel;
     }
 
     [Serializable]
@@ -873,5 +925,21 @@ public class StorePersistence : MonoBehaviour
         public ProductDefinition[] shelfProducts;
         public int[] shelfQuantities;
         public List<DynamicFacilitySaveData> dynamicFacilities;
+        public int checkoutUpgradeLevel;
+        public int advertisingUpgradeLevel;
+        public int trafficUpgradeLevel;
+    }
+
+    bool IsUpgradeLevelValid(StoreUpgradeType type, int level, out string error)
+    {
+        int maxLevel = upgradeSystem.GetMaxLevel(type);
+        if (level < 0 || level > maxLevel)
+        {
+            error = $"{upgradeSystem.GetDisplayName(type)} 레벨이 올바르지 않습니다. 현재 값: {level}";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
     }
 }
