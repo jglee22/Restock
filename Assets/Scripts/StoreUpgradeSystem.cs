@@ -84,6 +84,37 @@ public class StoreUpgradeSystem : MonoBehaviour
         return config.levelCosts.Length;
     }
 
+    public float GetLevelMultiplier(StoreUpgradeType type)
+    {
+        return MultiplierFor(ConfigFor(type), GetLevel(type));
+    }
+
+    public bool TryGetNextMultiplier(StoreUpgradeType type, out float multiplier)
+    {
+        multiplier = 1f;
+        int level = GetLevel(type);
+        if (level >= GetMaxLevel(type))
+        {
+            return false;
+        }
+
+        multiplier = MultiplierFor(ConfigFor(type), level + 1);
+        return multiplier > 0f;
+    }
+
+    public string GetSummary(StoreUpgradeType type)
+    {
+        switch (type)
+        {
+            case StoreUpgradeType.FastCheckout:
+                return "계산 시간을 줄입니다.";
+            case StoreUpgradeType.Advertising:
+                return "상품 구매 확률을 높입니다.";
+            default:
+                return "고객 방문 간격을 줄입니다.";
+        }
+    }
+
     public bool TryGetNextCost(StoreUpgradeType type, out int cost)
     {
         cost = 0;
