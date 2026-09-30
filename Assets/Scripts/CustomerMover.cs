@@ -135,8 +135,10 @@ public class CustomerMover : MonoBehaviour
             return;
         }
 
-        agent.isStopped = true;
         agent.ResetPath();
+        agent.isStopped = true;
+        agent.updateRotation = false;
+        FaceCheckoutCounter();
     }
 
     public void NotifyCheckoutCompleted()
@@ -145,8 +147,26 @@ public class CustomerMover : MonoBehaviour
         state = CustomerState.Leaving;
         if (agent != null)
         {
+            agent.updateRotation = true;
             agent.isStopped = false;
         }
+    }
+
+    void FaceCheckoutCounter()
+    {
+        if (checkout == null)
+        {
+            return;
+        }
+
+        Vector3 direction = checkout.transform.position - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude <= 0.0001f)
+        {
+            return;
+        }
+
+        transform.rotation = Quaternion.LookRotation(direction);
     }
 
     System.Collections.IEnumerator Visit()
@@ -239,6 +259,17 @@ public class CustomerMover : MonoBehaviour
 
             if (state == CustomerState.CheckingOut)
             {
+                // ResetPath가 같은 프레임에 정지를 해제하므로, 계산이 끝날 때까지 멈춰 둔다.
+                if (agent != null)
+                {
+                    agent.isStopped = true;
+                    agent.updateRotation = false;
+                    if (agent.velocity.sqrMagnitude > 0.01f)
+                    {
+                        agent.velocity = Vector3.zero;
+                    }
+                }
+
                 yield return null;
                 continue;
             }
