@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Globalization;
 using System.Text;
 using TMPro;
@@ -49,9 +50,23 @@ public class StoreHud : MonoBehaviour
     [SerializeField] GameObject pricePanel;
     [SerializeField] GameObject saveLoadPanel;
 
+    const float MoneyPulseSeconds = 0.16f;
+    const float BannerFadeInSeconds = 0.12f;
+    const float BannerHoldSeconds = 0.9f;
+    const float BannerFadeOutSeconds = 0.22f;
+
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
     int displayedMoney = int.MinValue;
+    bool suppressNextBanner;
+    int moneyPulseVersion;
+    int bannerVersion;
+    Vector3 moneyBaseScale = Vector3.one;
+    Color moneyBaseColor = Color.white;
+    GameObject phaseBanner;
+    CanvasGroup phaseBannerGroup;
+    TMP_Text phaseBannerText;
+    StorePresentationFeedback presentation;
     int displayedRevenue = int.MinValue;
     int displayedExpense = int.MinValue;
     int displayedResultDay = int.MinValue;
@@ -77,6 +92,14 @@ public class StoreHud : MonoBehaviour
         {
             skipTimeLabel = skipTimeButton.GetComponentInChildren<TMP_Text>(true);
         }
+
+        if (moneyText != null)
+        {
+            moneyBaseScale = moneyText.rectTransform.localScale;
+            moneyBaseColor = moneyText.color;
+        }
+
+        EnsurePhaseBanner();
     }
 
     void OnEnable()
@@ -101,6 +124,7 @@ public class StoreHud : MonoBehaviour
 
     void Start()
     {
+        EnsurePhaseBanner();
         Refresh(forceVisibility: true);
     }
 
@@ -128,17 +152,17 @@ public class StoreHud : MonoBehaviour
     {
         if (WasEscapePressed())
         {
-            if (upgradePanel != null && upgradePanel.activeSelf)
+            if (IsWorkPanelOpen(upgradePanel))
             {
                 OnCloseUpgradePanel();
             }
-            else if (pricePanel != null && pricePanel.activeSelf)
+            else if (IsWorkPanelOpen(pricePanel))
             {
-                SetObjectVisible(pricePanel, false);
+                SetWorkPanelVisible(pricePanel, false);
             }
-            else if (orderPanel != null && orderPanel.activeSelf)
+            else if (IsWorkPanelOpen(orderPanel))
             {
-                SetObjectVisible(orderPanel, false);
+                SetWorkPanelVisible(orderPanel, false);
             }
         }
 
@@ -160,9 +184,9 @@ public class StoreHud : MonoBehaviour
         RefreshEvent();
         RefreshMoney();
         RefreshLoadButton();
-        if (session.Phase != StorePhase.Preparation)
+        if (session.Phase != StorePhase.Preparation && IsWorkPanelOpen(upgradePanel))
         {
-            SetObjectVisible(upgradePanel, false);
+            SetWorkPanelVisible(upgradePanel, false);
         }
 
         RefreshUpgradePanel(false);
@@ -182,16 +206,50 @@ public class StoreHud : MonoBehaviour
             return;
         }
 
+        StorePhase previousPhase = displayedPhase;
         displayedPhase = session.Phase;
+        if (previousPhase != displayedPhase)
+        {
+            if (suppressNextBanner)
+            {
+                suppressNextBanner = false;
+                HidePhaseBanner();
+            }
+            else if (displayedPhase != StorePhase.Result)
+            {
+                PlayPhaseBanner(displayedPhase);
+            }
+        }
+        else
+        {
+            suppressNextBanner = false;
+        }
+
         SetButtonVisible(startBusinessButton, session.Phase == StorePhase.Preparation);
         SetButtonVisible(showResultButton, session.Phase == StorePhase.Closing);
         SetButtonInteractable(showResultButton, CanShowResult());
         SetObjectVisible(speedControls, session.Phase == StorePhase.Open);
-        SetObjectVisible(resultPanel, session.Phase == StorePhase.Result);
+        if (session.Phase == StorePhase.Result)
+        {
+            StorePresentationFeedback feedback = Presentation();
+            if (feedback != null)
+            {
+                feedback.PresentResult(resultPanel);
+            }
+            else
+            {
+                SetObjectVisible(resultPanel, true);
+            }
+        }
+        else
+        {
+            SetWorkPanelVisible(resultPanel, false);
+        }
+
         if (session.Phase != StorePhase.Preparation)
         {
-            SetObjectVisible(orderPanel, false);
-            SetObjectVisible(pricePanel, false);
+            SetWorkPanelVisible(orderPanel, false);
+            SetWorkPanelVisible(pricePanel, false);
         }
 
         SetButtonVisible(orderToggleButton, session.Phase == StorePhase.Preparation);
@@ -201,7 +259,7 @@ public class StoreHud : MonoBehaviour
         SetButtonVisible(upgradeButton, session.Phase == StorePhase.Preparation);
         if (session.Phase != StorePhase.Preparation)
         {
-            SetObjectVisible(upgradePanel, false);
+            SetWorkPanelVisible(upgradePanel, false);
         }
     }
 
@@ -255,13 +313,19 @@ public class StoreHud : MonoBehaviour
             return;
         }
 
-        if (displayedMoney == economy.CurrentMoney)
+        int nextMoney = economy.CurrentMoney;
+        if (displayedMoney == nextMoney)
         {
             return;
         }
 
-        displayedMoney = economy.CurrentMoney;
+        int previousMoney = displayedMoney;
+        displayedMoney = nextMoney;
         SetText(moneyText, FormatWon(displayedMoney));
+        if (previousMoney != int.MinValue)
+        {
+            StartCoroutine(PulseMoney(nextMoney >= previousMoney));
+        }
     }
 
     void RefreshResult()
@@ -526,6 +590,20 @@ public class StoreHud : MonoBehaviour
         displayedResultDay = int.MinValue;
         displayedUpgradeMoney = int.MinValue;
         upgradeRowsDirty = true;
+        suppressNextBanner = true;
+        moneyPulseVersion += 1;
+        if (moneyText != null)
+        {
+            moneyText.rectTransform.localScale = moneyBaseScale;
+            moneyText.color = moneyBaseColor;
+        }
+
+        StorePresentationFeedback feedback = Presentation();
+        if (feedback != null)
+        {
+            feedback.ResetPanels();
+        }
+        HidePhaseBanner();
         CloseWorkPanels();
         if (buildMode != null && buildMode.IsActive)
         {
@@ -630,9 +708,9 @@ public class StoreHud : MonoBehaviour
 
     public void CloseWorkPanels()
     {
-        SetObjectVisible(orderPanel, false);
-        SetObjectVisible(pricePanel, false);
-        SetObjectVisible(upgradePanel, false);
+        SetWorkPanelVisible(orderPanel, false);
+        SetWorkPanelVisible(pricePanel, false);
+        SetWorkPanelVisible(upgradePanel, false);
     }
 
     void OnToggleOrderPanel()
@@ -647,7 +725,7 @@ public class StoreHud : MonoBehaviour
 
     void OnToggleUpgradePanel()
     {
-        bool opening = upgradePanel != null && !upgradePanel.activeSelf;
+        bool opening = !IsWorkPanelOpen(upgradePanel);
         if (!ToggleWorkPanel(upgradePanel) || !opening)
         {
             return;
@@ -664,7 +742,7 @@ public class StoreHud : MonoBehaviour
             return false;
         }
 
-        bool opening = !panel.activeSelf;
+        bool opening = !IsWorkPanelOpen(panel);
         CloseWorkPanels();
         if (buildMode != null && buildMode.IsActive)
         {
@@ -673,7 +751,7 @@ public class StoreHud : MonoBehaviour
 
         if (opening)
         {
-            panel.SetActive(true);
+            SetWorkPanelVisible(panel, true);
         }
 
         return true;
@@ -681,7 +759,224 @@ public class StoreHud : MonoBehaviour
 
     void OnCloseUpgradePanel()
     {
-        SetObjectVisible(upgradePanel, false);
+        SetWorkPanelVisible(upgradePanel, false);
+    }
+
+    StorePresentationFeedback Presentation()
+    {
+        if (presentation == null)
+        {
+            presentation = FindFirstObjectByType<StorePresentationFeedback>();
+        }
+
+        return presentation;
+    }
+
+    bool IsWorkPanelOpen(GameObject panel)
+    {
+        StorePresentationFeedback feedback = Presentation();
+        if (feedback != null)
+        {
+            return feedback.IsOpen(panel);
+        }
+
+        return panel != null && panel.activeSelf;
+    }
+
+    void SetWorkPanelVisible(GameObject panel, bool visible)
+    {
+        StorePresentationFeedback feedback = Presentation();
+        if (feedback == null)
+        {
+            SetObjectVisible(panel, visible);
+            return;
+        }
+
+        if (visible)
+        {
+            feedback.Show(panel);
+        }
+        else
+        {
+            feedback.Hide(panel);
+        }
+    }
+
+    IEnumerator PulseMoney(bool increased)
+    {
+        if (moneyText == null)
+        {
+            yield break;
+        }
+
+        int version = ++moneyPulseVersion;
+        Color peak = increased
+            ? Color.Lerp(moneyBaseColor, new Color(1f, 0.95f, 0.78f), 0.45f)
+            : Color.Lerp(moneyBaseColor, new Color(0.78f, 0.74f, 0.68f), 0.45f);
+        float elapsed = 0f;
+        while (elapsed < MoneyPulseSeconds)
+        {
+            if (version != moneyPulseVersion)
+            {
+                yield break;
+            }
+
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / MoneyPulseSeconds);
+            float scale = t < 0.4f
+                ? Mathf.Lerp(1f, 1.06f, t / 0.4f)
+                : Mathf.Lerp(1.06f, 1f, (t - 0.4f) / 0.6f);
+            moneyText.rectTransform.localScale = moneyBaseScale * scale;
+            moneyText.color = Color.Lerp(moneyBaseColor, peak, t < 0.4f ? t / 0.4f : (1f - t) / 0.6f);
+            yield return null;
+        }
+
+        if (version == moneyPulseVersion)
+        {
+            moneyText.rectTransform.localScale = moneyBaseScale;
+            moneyText.color = moneyBaseColor;
+        }
+    }
+
+    void EnsurePhaseBanner()
+    {
+        if (phaseBanner != null || dayText == null)
+        {
+            return;
+        }
+
+        Canvas canvas = dayText.canvas;
+        if (canvas == null)
+        {
+            return;
+        }
+
+        phaseBanner = new GameObject("PhaseBanner", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+        phaseBanner.transform.SetParent(canvas.transform, false);
+        RectTransform rect = phaseBanner.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0f, 180f);
+        rect.sizeDelta = new Vector2(560f, 108f);
+        Image image = phaseBanner.GetComponent<Image>();
+        image.color = new Color(0.98f, 0.95f, 0.88f, 0.94f);
+        image.raycastTarget = false;
+        phaseBannerGroup = phaseBanner.GetComponent<CanvasGroup>();
+        phaseBannerGroup.alpha = 0f;
+        phaseBannerGroup.interactable = false;
+        phaseBannerGroup.blocksRaycasts = false;
+
+        GameObject label = new GameObject("Label", typeof(RectTransform));
+        label.transform.SetParent(phaseBanner.transform, false);
+        RectTransform labelRect = label.GetComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = new Vector2(16f, 8f);
+        labelRect.offsetMax = new Vector2(-16f, -8f);
+        phaseBannerText = label.AddComponent<TextMeshProUGUI>();
+        phaseBannerText.font = dayText.font;
+        phaseBannerText.fontSharedMaterial = dayText.fontSharedMaterial;
+        phaseBannerText.fontSize = 32f;
+        phaseBannerText.alignment = TextAlignmentOptions.Center;
+        phaseBannerText.color = new Color(0.24f, 0.18f, 0.12f, 1f);
+        phaseBannerText.raycastTarget = false;
+        phaseBannerText.text = string.Empty;
+        phaseBanner.SetActive(false);
+    }
+
+    void PlayPhaseBanner(StorePhase phase)
+    {
+        EnsurePhaseBanner();
+        if (phaseBanner == null || phaseBannerText == null)
+        {
+            return;
+        }
+
+        phaseBannerText.text = BannerText(phase);
+        phaseBanner.SetActive(true);
+        phaseBanner.transform.SetAsLastSibling();
+        StartCoroutine(PlayBanner());
+    }
+
+    string BannerText(StorePhase phase)
+    {
+        if (phase == StorePhase.Open)
+        {
+            string eventLabel = eventSystem != null ? eventSystem.StatusLabel : string.Empty;
+            return string.IsNullOrEmpty(eventLabel) ? "영업 시작" : "영업 시작\n" + eventLabel;
+        }
+
+        if (phase == StorePhase.Closing)
+        {
+            return "마감 중";
+        }
+
+        int day = session != null ? session.Day : 1;
+        return day.ToString(CultureInfo.InvariantCulture) + "일차 준비";
+    }
+
+    void HidePhaseBanner()
+    {
+        bannerVersion += 1;
+        if (phaseBannerGroup != null)
+        {
+            phaseBannerGroup.alpha = 0f;
+        }
+
+        if (phaseBanner != null)
+        {
+            phaseBanner.SetActive(false);
+        }
+    }
+
+    IEnumerator PlayBanner()
+    {
+        int version = ++bannerVersion;
+        phaseBannerGroup.alpha = 0f;
+        float elapsed = 0f;
+        while (elapsed < BannerFadeInSeconds)
+        {
+            if (version != bannerVersion)
+            {
+                yield break;
+            }
+
+            elapsed += Time.unscaledDeltaTime;
+            phaseBannerGroup.alpha = Mathf.Clamp01(elapsed / BannerFadeInSeconds);
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < BannerHoldSeconds)
+        {
+            if (version != bannerVersion)
+            {
+                yield break;
+            }
+
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < BannerFadeOutSeconds)
+        {
+            if (version != bannerVersion)
+            {
+                yield break;
+            }
+
+            elapsed += Time.unscaledDeltaTime;
+            phaseBannerGroup.alpha = 1f - Mathf.Clamp01(elapsed / BannerFadeOutSeconds);
+            yield return null;
+        }
+
+        if (version == bannerVersion && phaseBanner != null)
+        {
+            phaseBannerGroup.alpha = 0f;
+            phaseBanner.SetActive(false);
+        }
     }
 
     void OnBuyUpgrade(int rowIndex)
