@@ -112,3 +112,7 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Local third-party character pack
+/Assets/ThirdParty/simple modular human/
+/Assets/ThirdParty/simple modular human.meta
