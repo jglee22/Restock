@@ -38,6 +38,7 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] StoreStatistics storeStatistics;
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] StoreEventSystem eventSystem;
+    [SerializeField] StoreUpgradeSystem upgradeSystem;
     [SerializeField] NavMeshSurface navMeshSurface;
     [SerializeField] Camera viewCamera;
     [SerializeField] Collider buildSurface;
@@ -616,6 +617,15 @@ public class BuildModeController : MonoBehaviour
         else
         {
             counter.BindEventSystem(eventSystem);
+        }
+
+        if (upgradeSystem == null)
+        {
+            Debug.LogWarning("BuildModeController: StoreUpgradeSystem이 없어 계산대에 업그레이드를 연결하지 못했습니다.", this);
+        }
+        else
+        {
+            counter.BindUpgradeSystem(upgradeSystem);
         }
 
         if (customerSpawner == null)

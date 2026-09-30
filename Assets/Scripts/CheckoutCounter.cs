@@ -10,6 +10,7 @@ public class CheckoutCounter : MonoBehaviour
     [SerializeField] StoreEconomy economy;
     [SerializeField] StoreStatistics statistics;
     [SerializeField] StoreEventSystem eventSystem;
+    [SerializeField] StoreUpgradeSystem upgradeSystem;
     [SerializeField] float checkoutDuration = 1.5f;
 
     readonly List<CustomerMover> queue = new List<CustomerMover>();
@@ -40,6 +41,17 @@ public class CheckoutCounter : MonoBehaviour
         }
 
         eventSystem = storeEventSystem;
+    }
+
+    public void BindUpgradeSystem(StoreUpgradeSystem storeUpgradeSystem)
+    {
+        if (storeUpgradeSystem == null)
+        {
+            WarnOnce("CheckoutCounter: StoreUpgradeSystem이 연결되지 않았습니다.");
+            return;
+        }
+
+        upgradeSystem = storeUpgradeSystem;
     }
 
     int checkoutToken;
@@ -126,6 +138,15 @@ public class CheckoutCounter : MonoBehaviour
         else
         {
             duration *= eventSystem.CheckoutDurationMultiplier;
+        }
+
+        if (upgradeSystem == null)
+        {
+            WarnOnce("CheckoutCounter: StoreUpgradeSystem이 연결되지 않았습니다.");
+        }
+        else
+        {
+            duration *= upgradeSystem.CheckoutDurationMultiplier;
         }
 
         if (duration < 0f)

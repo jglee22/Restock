@@ -111,6 +111,28 @@ public class StoreEconomy : MonoBehaviour
         return true;
     }
 
+    public bool CanAffordUpgrade(int amount)
+    {
+        return amount >= 0 && currentMoney >= amount;
+    }
+
+    public bool TrySpendUpgrade(int amount)
+    {
+        if (amount < 0)
+        {
+            Debug.LogWarning($"StoreEconomy: 업그레이드 비용은 0 이상이어야 합니다. 요청 금액: {amount}", this);
+            return false;
+        }
+
+        if (currentMoney < amount)
+        {
+            return false;
+        }
+
+        currentMoney -= amount;
+        return true;
+    }
+
     public bool AddFacilityRefund(int amount)
     {
         if (amount < 0)
