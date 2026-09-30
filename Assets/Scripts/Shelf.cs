@@ -45,6 +45,7 @@ public class Shelf : MonoBehaviour
         }
 
         assignedProduct = product;
+        RefreshProductDisplay();
         return true;
     }
 
@@ -78,6 +79,7 @@ public class Shelf : MonoBehaviour
 
             assignedProduct = null;
             currentQuantity = 0;
+            RefreshProductDisplay();
             return true;
         }
 
@@ -99,6 +101,7 @@ public class Shelf : MonoBehaviour
 
         assignedProduct = product;
         currentQuantity = quantity;
+        RefreshProductDisplay();
         return true;
     }
 
@@ -121,6 +124,7 @@ public class Shelf : MonoBehaviour
         }
 
         currentQuantity += transfer;
+        RefreshProductDisplay();
         return transfer;
     }
 
@@ -139,6 +143,7 @@ public class Shelf : MonoBehaviour
 
         storeInventory.AddStock(assignedProduct, transfer);
         currentQuantity -= transfer;
+        RefreshProductDisplay();
         return transfer;
     }
 
@@ -156,6 +161,7 @@ public class Shelf : MonoBehaviour
         }
 
         currentQuantity -= 1;
+        RefreshProductDisplay();
         return true;
     }
 
@@ -258,6 +264,15 @@ public class Shelf : MonoBehaviour
         if (customerStandPoint == null)
         {
             Debug.LogWarning("Shelf: CustomerStandPoint가 연결되지 않았습니다.", this);
+        }
+    }
+
+    void RefreshProductDisplay()
+    {
+        ShelfProductDisplay display = GetComponent<ShelfProductDisplay>();
+        if (display != null)
+        {
+            display.Refresh();
         }
     }
 
