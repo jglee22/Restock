@@ -71,7 +71,7 @@ public class ProductOrderRow : MonoBehaviour
         SetText(nameText, product.DisplayName);
         SetText(stockText, "창고 " + stock.ToString(CultureInfo.InvariantCulture));
         SetText(priceText, "개당 " + FormatWon(product.PurchasePrice));
-        SetText(buttonLabel, orderQuantity.ToString(CultureInfo.InvariantCulture) + "개 주문");
+        SetText(buttonLabel, OrderButtonLabel());
 
         if (orderButton != null && ordering != null)
         {
@@ -109,7 +109,7 @@ public class ProductOrderRow : MonoBehaviour
 
         SetText(nameText, product.DisplayName);
         SetText(priceText, "개당 " + FormatWon(product.PurchasePrice));
-        SetText(buttonLabel, orderQuantity.ToString(CultureInfo.InvariantCulture) + "개 주문");
+        SetText(buttonLabel, OrderButtonLabel());
     }
 
     static void SetText(TMP_Text text, string value)
@@ -118,6 +118,17 @@ public class ProductOrderRow : MonoBehaviour
         {
             text.text = value;
         }
+    }
+
+    string OrderButtonLabel()
+    {
+        int price = product != null ? product.PurchasePrice : 0;
+        if (price < 0 || orderQuantity < 1 || (price > 0 && orderQuantity > int.MaxValue / price))
+        {
+            return orderQuantity.ToString(CultureInfo.InvariantCulture) + "개";
+        }
+
+        return orderQuantity.ToString(CultureInfo.InvariantCulture) + "개 " + FormatWon(price * orderQuantity);
     }
 
     static string FormatWon(int amount)

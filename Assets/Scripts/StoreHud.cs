@@ -16,10 +16,13 @@ public class StoreHud : MonoBehaviour
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] StoreEventSystem eventSystem;
     [SerializeField] StoreUpgradeSystem upgradeSystem;
+    [SerializeField] BuildModeController buildMode;
     [SerializeField] Button upgradeButton;
     [SerializeField] GameObject upgradePanel;
     [SerializeField] Button upgradeCloseButton;
     [SerializeField] UpgradeRowWidgets[] upgradeRows;
+    [SerializeField] Button orderToggleButton;
+    [SerializeField] Button priceToggleButton;
     [SerializeField] TMP_Text dayText;
     [SerializeField] TMP_Text timeText;
     [SerializeField] TMP_Text phaseText;
@@ -89,8 +92,10 @@ public class StoreHud : MonoBehaviour
         Bind(restockShelvesButton, OnRestockShelves);
         Bind(saveButton, OnSave);
         Bind(loadButton, OnLoad);
-        Bind(upgradeButton, OnOpenUpgradePanel);
+        Bind(upgradeButton, OnToggleUpgradePanel);
         Bind(upgradeCloseButton, OnCloseUpgradePanel);
+        Bind(orderToggleButton, OnToggleOrderPanel);
+        Bind(priceToggleButton, OnTogglePricePanel);
         BindUpgradeRows();
     }
 
@@ -112,16 +117,29 @@ public class StoreHud : MonoBehaviour
         Unbind(restockShelvesButton, OnRestockShelves);
         Unbind(saveButton, OnSave);
         Unbind(loadButton, OnLoad);
-        Unbind(upgradeButton, OnOpenUpgradePanel);
+        Unbind(upgradeButton, OnToggleUpgradePanel);
         Unbind(upgradeCloseButton, OnCloseUpgradePanel);
+        Unbind(orderToggleButton, OnToggleOrderPanel);
+        Unbind(priceToggleButton, OnTogglePricePanel);
         UnbindUpgradeRows();
     }
 
     void Update()
     {
-        if (upgradePanel != null && upgradePanel.activeSelf && WasEscapePressed())
+        if (WasEscapePressed())
         {
-            OnCloseUpgradePanel();
+            if (upgradePanel != null && upgradePanel.activeSelf)
+            {
+                OnCloseUpgradePanel();
+            }
+            else if (pricePanel != null && pricePanel.activeSelf)
+            {
+                SetObjectVisible(pricePanel, false);
+            }
+            else if (orderPanel != null && orderPanel.activeSelf)
+            {
+                SetObjectVisible(orderPanel, false);
+            }
         }
 
         Refresh(forceVisibility: false);
@@ -134,10 +152,11 @@ public class StoreHud : MonoBehaviour
             return;
         }
 
-        SetText(dayText, session.DayLabel);
-        SetText(timeText, session.TimeLabel);
-        SetText(phaseText, session.Phase.ToString());
+        SetText(dayText, session.Day.ToString(CultureInfo.InvariantCulture) + "일차");
+        SetText(timeText, session.IsPaused ? session.TimeLabel + "  일시정지" : session.TimeLabel);
+        SetText(phaseText, PhaseLabel(session.Phase));
         SetText(skipTimeLabel, session.SkipTimeLabel);
+        RefreshSpeedIndicators();
         RefreshEvent();
         RefreshMoney();
         RefreshLoadButton();
@@ -169,8 +188,14 @@ public class StoreHud : MonoBehaviour
         SetButtonInteractable(showResultButton, CanShowResult());
         SetObjectVisible(speedControls, session.Phase == StorePhase.Open);
         SetObjectVisible(resultPanel, session.Phase == StorePhase.Result);
-        SetObjectVisible(orderPanel, session.Phase == StorePhase.Preparation);
-        SetObjectVisible(pricePanel, session.Phase == StorePhase.Preparation);
+        if (session.Phase != StorePhase.Preparation)
+        {
+            SetObjectVisible(orderPanel, false);
+            SetObjectVisible(pricePanel, false);
+        }
+
+        SetButtonVisible(orderToggleButton, session.Phase == StorePhase.Preparation);
+        SetButtonVisible(priceToggleButton, session.Phase == StorePhase.Preparation);
         SetButtonVisible(restockShelvesButton, session.Phase == StorePhase.Preparation || session.Phase == StorePhase.Open);
         SetObjectVisible(saveLoadPanel, session.Phase == StorePhase.Preparation);
         SetButtonVisible(upgradeButton, session.Phase == StorePhase.Preparation);
@@ -280,22 +305,20 @@ public class StoreHud : MonoBehaviour
         int averageTransaction = AverageTransactionValue(displayedRevenue, purchasingCustomers);
         float averageCheckoutWait = statistics != null ? statistics.AverageCheckoutWaitSeconds : 0f;
         var builder = new StringBuilder();
-        builder.Append(session.DayLabel).Append(" 종료\n");
-        if (eventSystem != null)
-        {
-            builder.Append(eventSystem.ResultLabel).Append('\n');
-        }
-        builder.Append("오늘 매출 ").Append(FormatWon(displayedRevenue)).Append('\n');
-        builder.Append("매입 비용 ").Append(FormatWon(displayedExpense)).Append('\n');
+        builder.Append(session.Day.ToString(CultureInfo.InvariantCulture)).Append("일차 종료\n\n");
+        builder.Append("[오늘의 매출]\n");
+        builder.Append("매출 ").Append(FormatWon(displayedRevenue)).Append('\n');
+        builder.Append("지출 ").Append(FormatWon(displayedExpense)).Append('\n');
         builder.Append("순이익 ").Append(FormatSignedWon(economy.NetProfit)).Append("\n\n");
+        builder.Append("[고객]\n");
         builder.Append("방문 고객 ").Append(visitors.ToString(CultureInfo.InvariantCulture)).Append("명\n");
         builder.Append("구매 고객 ").Append(purchasingCustomers.ToString(CultureInfo.InvariantCulture)).Append("명\n");
-        builder.Append("판매 상품 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture)).Append("개\n");
-        builder.Append("품절 횟수 ").Append(stockoutCount.ToString(CultureInfo.InvariantCulture)).Append("회\n");
-        builder.Append("평균 객단가 ").Append(FormatWon(averageTransaction)).Append('\n');
-        builder.Append("평균 계산 대기 ").Append(FormatCheckoutWait(averageCheckoutWait)).Append('\n');
-        builder.Append("구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append("\n\n");
-        builder.Append("상품별 판매");
+        builder.Append("구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append('\n');
+        builder.Append("평균 결제 금액 ").Append(FormatWon(averageTransaction)).Append('\n');
+        builder.Append("평균 대기 시간 ").Append(FormatCheckoutWait(averageCheckoutWait)).Append("\n\n");
+        builder.Append("[판매]\n");
+        builder.Append("판매 수량 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture)).Append("개\n");
+        builder.Append("품절 횟수 ").Append(stockoutCount.ToString(CultureInfo.InvariantCulture)).Append("회");
         if (statistics != null)
         {
             for (int index = 0; index < statistics.TrackedProductCount; index++)
@@ -313,7 +336,39 @@ public class StoreHud : MonoBehaviour
             }
         }
 
+        builder.Append("\n\n[이벤트]\n");
+        builder.Append(eventSystem != null ? eventSystem.ResultLabel : "오늘의 이벤트: 없음");
         SetText(resultText, builder.ToString());
+    }
+
+    static string PhaseLabel(StorePhase phase)
+    {
+        switch (phase)
+        {
+            case StorePhase.Preparation:
+                return "준비";
+            case StorePhase.Open:
+                return "영업 중";
+            case StorePhase.Closing:
+                return "마감 중";
+            default:
+                return "결산";
+        }
+    }
+
+    void RefreshSpeedIndicators()
+    {
+        if (session == null)
+        {
+            return;
+        }
+
+        TMP_Text pauseLabel = pauseButton != null ? pauseButton.GetComponentInChildren<TMP_Text>(true) : null;
+        SetText(pauseLabel, "일시정지");
+        float scale = session.PlayingTimeScale;
+        SetButtonInteractable(speed1Button, !Mathf.Approximately(scale, StoreSession.NormalTimeScale));
+        SetButtonInteractable(speed2Button, !Mathf.Approximately(scale, StoreSession.DoubleTimeScale));
+        SetButtonInteractable(speed3Button, !Mathf.Approximately(scale, StoreSession.TripleTimeScale));
     }
 
     static int AverageTransactionValue(int dailyRevenue, int purchasingCustomers)
@@ -377,11 +432,22 @@ public class StoreHud : MonoBehaviour
             return "-" + FormatWon(-amount);
         }
 
+        if (amount > 0)
+        {
+            return "+" + FormatWon(amount);
+        }
+
         return FormatWon(amount);
     }
 
     void OnStartBusiness()
     {
+        CloseWorkPanels();
+        if (buildMode != null && buildMode.IsActive)
+        {
+            buildMode.ExitBuildMode();
+        }
+
         session.StartBusiness();
         Refresh(forceVisibility: true);
     }
@@ -458,6 +524,14 @@ public class StoreHud : MonoBehaviour
 
         displayedMoney = int.MinValue;
         displayedResultDay = int.MinValue;
+        displayedUpgradeMoney = int.MinValue;
+        upgradeRowsDirty = true;
+        CloseWorkPanels();
+        if (buildMode != null && buildMode.IsActive)
+        {
+            buildMode.ExitBuildMode();
+        }
+
         Refresh(forceVisibility: true);
     }
 
@@ -554,16 +628,55 @@ public class StoreHud : MonoBehaviour
         }
     }
 
-    void OnOpenUpgradePanel()
+    public void CloseWorkPanels()
     {
-        if (session == null || session.Phase != StorePhase.Preparation || upgradePanel == null)
+        SetObjectVisible(orderPanel, false);
+        SetObjectVisible(pricePanel, false);
+        SetObjectVisible(upgradePanel, false);
+    }
+
+    void OnToggleOrderPanel()
+    {
+        ToggleWorkPanel(orderPanel);
+    }
+
+    void OnTogglePricePanel()
+    {
+        ToggleWorkPanel(pricePanel);
+    }
+
+    void OnToggleUpgradePanel()
+    {
+        bool opening = upgradePanel != null && !upgradePanel.activeSelf;
+        if (!ToggleWorkPanel(upgradePanel) || !opening)
         {
             return;
         }
 
         upgradeRowsDirty = true;
-        upgradePanel.SetActive(true);
         RefreshUpgradePanel(true);
+    }
+
+    bool ToggleWorkPanel(GameObject panel)
+    {
+        if (session == null || session.Phase != StorePhase.Preparation || panel == null)
+        {
+            return false;
+        }
+
+        bool opening = !panel.activeSelf;
+        CloseWorkPanels();
+        if (buildMode != null && buildMode.IsActive)
+        {
+            buildMode.ExitBuildMode();
+        }
+
+        if (opening)
+        {
+            panel.SetActive(true);
+        }
+
+        return true;
     }
 
     void OnCloseUpgradePanel()
@@ -655,16 +768,21 @@ public class StoreHud : MonoBehaviour
             shownUpgradeLevels[index] = level;
             SetText(row.titleText, upgradeSystem.GetDisplayName(type));
             SetText(row.levelText, "Lv " + level.ToString(CultureInfo.InvariantCulture) + " / " + maxLevel.ToString(CultureInfo.InvariantCulture));
-            SetText(row.effectText, UpgradeEffectLabel(type));
-            if (upgradeSystem.TryGetNextCost(type, out int cost))
+            SetText(row.effectText, upgradeSystem.GetSummary(type));
+            string currentMultiplier = FormatMultiplier(upgradeSystem.GetLevelMultiplier(type));
+            bool hasNextCost = upgradeSystem.TryGetNextCost(type, out int cost);
+            bool hasNextMultiplier = upgradeSystem.TryGetNextMultiplier(type, out float nextMultiplier);
+            if (hasNextCost && hasNextMultiplier)
             {
-                SetText(row.costText, "다음 비용: " + FormatWon(cost));
+                SetText(row.costText, "현재 " + currentMultiplier + " · 다음 " + FormatMultiplier(nextMultiplier) + " · " + FormatWon(cost));
             }
             else
             {
-                SetText(row.costText, "다음 비용: MAX");
+                SetText(row.costText, "현재 " + currentMultiplier + " · MAX");
             }
 
+            TMP_Text buyLabel = row.buyButton != null ? row.buyButton.GetComponentInChildren<TMP_Text>(true) : null;
+            SetText(buyLabel, hasNextCost ? "구매" : "MAX");
             SetButtonInteractable(row.buyButton, upgradeSystem.CanPurchase(type));
         }
     }
@@ -679,17 +797,9 @@ public class StoreHud : MonoBehaviour
         return shownUpgradeLevels[index];
     }
 
-    static string UpgradeEffectLabel(StoreUpgradeType type)
+    static string FormatMultiplier(float value)
     {
-        switch (type)
-        {
-            case StoreUpgradeType.FastCheckout:
-                return "계산 시간 -10% / Lv";
-            case StoreUpgradeType.Advertising:
-                return "구매 확률 +10% / Lv";
-            default:
-                return "고객 방문 간격 -10% / Lv";
-        }
+        return "×" + value.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
     static bool WasEscapePressed()

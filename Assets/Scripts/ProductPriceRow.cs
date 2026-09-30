@@ -88,7 +88,7 @@ public class ProductPriceRow : MonoBehaviour
 
         shownPrice = hasCurrentPrice ? currentPrice : int.MinValue;
         SetText(nameText, product.DisplayName);
-        SetText(basePriceText, "기준 " + FormatWon(product.BaseSellPrice));
+        SetText(basePriceText, "매입 " + FormatWon(product.PurchasePrice));
         SetText(currentPriceText, "판매 " + FormatWon(currentPrice));
         SetText(decreaseLabel, FormatStep(-priceStep));
         SetText(increaseLabel, FormatStep(priceStep));
@@ -136,7 +136,7 @@ public class ProductPriceRow : MonoBehaviour
         }
 
         SetText(nameText, product.DisplayName);
-        SetText(basePriceText, "기준 " + FormatWon(product.BaseSellPrice));
+        SetText(basePriceText, "매입 " + FormatWon(product.PurchasePrice));
         SetText(currentPriceText, "판매 " + FormatWon(product.BaseSellPrice));
         SetText(decreaseLabel, FormatStep(-priceStep));
         SetText(increaseLabel, FormatStep(priceStep));

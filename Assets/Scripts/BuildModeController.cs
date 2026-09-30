@@ -58,6 +58,8 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] Button clearProductButton;
     [SerializeField] Button closeProductButton;
     [SerializeField] Button exitButton;
+    [SerializeField] StoreHud storeHud;
+    [SerializeField] TMP_Text buildStatusText;
 
     readonly Collider[] overlapHits = new Collider[32];
     readonly List<RaycastResult> uiHits = new List<RaycastResult>();
@@ -102,6 +104,12 @@ public class BuildModeController : MonoBehaviour
     bool previewValid;
     bool hasGrid;
     bool navMeshRefreshPending;
+    FacilityDefinition shownStatusFacility;
+    BuildToolMode shownStatusTool = (BuildToolMode)(-1);
+    int shownStatusPlacement = -2;
+    Shelf shownStatusShelf;
+    int shownProductQuantity = int.MinValue;
+    ProductDefinition shownAssignedProduct;
     float originX;
     float originZ;
     float floorTop;
@@ -168,6 +176,7 @@ public class BuildModeController : MonoBehaviour
             closeProductButton.onClick.AddListener(closeProduct);
         if (exitButton != null)
             exitButton.onClick.AddListener(ExitBuildMode);
+        RefreshFacilityButtonLabels();
     }
 
     void OnDisable()
@@ -251,6 +260,9 @@ public class BuildModeController : MonoBehaviour
         if (toolMode == BuildToolMode.Placement || toolMode == BuildToolMode.Moving)
             UpdatePreview();
 
+        UpdateBuildStatus();
+        RefreshProductStatusIfChanged();
+
         if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame || IsPointerOverUI())
             return;
 
@@ -276,8 +288,12 @@ public class BuildModeController : MonoBehaviour
 
         buildModeActive = true;
         rotationQuarterTurns = 0;
+        if (storeHud != null)
+            storeHud.CloseWorkPanels();
         if (buildPanel != null)
             buildPanel.SetActive(true);
+        shownStatusTool = (BuildToolMode)(-1);
+        UpdateBuildStatus();
     }
 
     public void ExitBuildMode()
@@ -1716,6 +1732,95 @@ public class BuildModeController : MonoBehaviour
         productDropdown.AddOptions(options);
         productDropdown.SetValueWithoutNotify(selectedIndex);
         productDropdown.RefreshShownValue();
+    }
+
+    void RefreshFacilityButtonLabels()
+    {
+        SetFacilityButtonLabel(shelfButton, 0, "진열대");
+        SetFacilityButtonLabel(refrigeratorButton, 1, "냉장고");
+        SetFacilityButtonLabel(checkoutButton, 2, "계산대");
+    }
+
+    void SetFacilityButtonLabel(Button button, int index, string fallbackName)
+    {
+        if (button == null)
+            return;
+
+        TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
+        string facilityName = fallbackName;
+        int cost = 0;
+        if (facilities != null && index >= 0 && index < facilities.Length && facilities[index] != null)
+        {
+            if (!string.IsNullOrEmpty(facilities[index].DisplayName))
+                facilityName = facilities[index].DisplayName;
+            cost = facilities[index].Cost;
+        }
+
+        if (label != null)
+            label.text = facilityName + " " + FormatWon(cost);
+    }
+
+    void UpdateBuildStatus()
+    {
+        if (buildStatusText == null)
+            return;
+
+        int placement = preview == null || !preview.activeSelf ? -1 : (previewValid ? 1 : 0);
+        if (shownStatusTool == toolMode
+            && shownStatusFacility == selected
+            && shownStatusPlacement == placement
+            && shownStatusShelf == assignmentShelf)
+        {
+            return;
+        }
+
+        shownStatusTool = toolMode;
+        shownStatusFacility = selected;
+        shownStatusPlacement = placement;
+        shownStatusShelf = assignmentShelf;
+        buildStatusText.text = BuildStatusLabel(placement);
+    }
+
+    string BuildStatusLabel(int placement)
+    {
+        switch (toolMode)
+        {
+            case BuildToolMode.Placement:
+                string facilityName = selected != null && !string.IsNullOrEmpty(selected.DisplayName)
+                    ? selected.DisplayName
+                    : "시설";
+                string price = selected != null ? " " + FormatWon(selected.Cost) : string.Empty;
+                if (placement < 0)
+                    return "배치: " + facilityName + price;
+                return facilityName + price + (placement == 1 ? " · 가능" : " · 불가");
+            case BuildToolMode.MoveSelect:
+                return "이동: 시설을 선택하세요";
+            case BuildToolMode.Moving:
+                return placement == 1 ? "이동 · 가능" : "이동 · 불가";
+            case BuildToolMode.DeleteSelect:
+                return "삭제 · 환불은 절반";
+            case BuildToolMode.ProductSelect:
+                return assignmentShelf == null ? "진열대를 선택하세요" : "상품 배치";
+            default:
+                return "시설을 고르세요";
+        }
+    }
+
+    void RefreshProductStatusIfChanged()
+    {
+        if (productAssignmentPanel == null || !productAssignmentPanel.activeSelf || assignmentShelf == null)
+            return;
+        if (shownProductQuantity == assignmentShelf.CurrentQuantity && shownAssignedProduct == assignmentShelf.AssignedProduct)
+            return;
+
+        shownProductQuantity = assignmentShelf.CurrentQuantity;
+        shownAssignedProduct = assignmentShelf.AssignedProduct;
+        RefreshProductStatus();
+    }
+
+    static string FormatWon(int amount)
+    {
+        return "₩" + amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     void RefreshProductStatus()
