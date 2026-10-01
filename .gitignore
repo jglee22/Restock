@@ -125,3 +125,9 @@ InitTestScene*.unity*
 # Local third-party refrigerator model
 /Assets/ThirdParty/commercial-fridge/
 /Assets/ThirdParty/commercial-fridge.meta
+
+# Local third-party store rack pack
+/Assets/Prefabs/Store+Racks+Pack.prefab
+/Assets/Prefabs/Store+Racks+Pack.prefab.meta
+/Assets/ThirdParty/Store+Racks+Pack.fbx
+/Assets/ThirdParty/Store+Racks+Pack.fbx.meta
