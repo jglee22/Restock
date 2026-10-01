@@ -343,6 +343,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7266241178433087823}
   - component: {fileID: 2499841547198211237}
+  - component: {fileID: 7446891019106367351}
   m_Layer: 0
   m_Name: VisualRoot
   m_TagString: Untagged
@@ -380,6 +381,96 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CustomerVisualAnimator
   agent: {fileID: 1419028304443453792}
   animator: {fileID: 5909559707570356974}
+--- !u!114 &7446891019106367351
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8068541737189650360}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c4e1a9b2d6f4e04a8b31c5d0e7f6a21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CustomerVisualVariantSelector
+  toggleParts:
+  - hair_a
+  - hair_b
+  - hair_c
+  - hair_d
+  - hair_e
+  - t_shirt
+  - shirt
+  - pullover
+  - tank_top
+  - trousers
+  - shortpants
+  - shoes1
+  - shoes2
+  - shoes3
+  outfits:
+  - parts:
+    - hair_a
+    - t_shirt
+    - trousers
+    - shoes1
+    materials:
+    - partName: hair_a
+      material: {fileID: 2100000, guid: b6838836b6062a049a62b6a8ed33b221, type: 2}
+    - partName: t_shirt
+      material: {fileID: 2100000, guid: e99a0023a519efe4d8388806828360a2, type: 2}
+    - partName: trousers
+      material: {fileID: 2100000, guid: 63df235f4f5732741b663d82d6dffa29, type: 2}
+    - partName: shoes1
+      material: {fileID: 2100000, guid: 66147649be9214146932b37bc97a3c7d, type: 2}
+    - partName: human_mesh
+      material: {fileID: 2100000, guid: 9d56d4f793312a140a130af0080c156a, type: 2}
+    - partName: human_head_mesh
+      material: {fileID: 2100000, guid: 9d56d4f793312a140a130af0080c156a, type: 2}
+  - parts:
+    - hair_c
+    - shirt
+    - trousers
+    - shoes2
+    materials:
+    - partName: shirt
+      material: {fileID: 2100000, guid: c29b14c66353eb8439d2637bebdefbdb, type: 2}
+    - partName: trousers
+      material: {fileID: 2100000, guid: 63df235f4f5732741b663d82d6dffa29, type: 2}
+    - partName: human_mesh
+      material: {fileID: 2100000, guid: 9d56d4f793312a140a130af0080c156a, type: 2}
+    - partName: human_head_mesh
+      material: {fileID: 2100000, guid: 9d56d4f793312a140a130af0080c156a, type: 2}
+  - parts:
+    - hair_d
+    - t_shirt
+    - shortpants
+    - shoes3
+    materials:
+    - partName: t_shirt
+      material: {fileID: 2100000, guid: f305cebc1a1daf241b7ffe75d33c21bb, type: 2}
+    - partName: shortpants
+      material: {fileID: 2100000, guid: 9b4d5c16032fb5f40a8c61b8055d4182, type: 2}
+    - partName: human_mesh
+      material: {fileID: 2100000, guid: cfb6c1f7e3c643741a0ee59f2f210170, type: 2}
+    - partName: human_head_mesh
+      material: {fileID: 2100000, guid: cfb6c1f7e3c643741a0ee59f2f210170, type: 2}
+  - parts:
+    - hair_b
+    - shirt
+    - trousers
+    - shoes1
+    materials:
+    - partName: shirt
+      material: {fileID: 2100000, guid: 7d155a9db1f690c45b545041b4676219, type: 2}
+    - partName: trousers
+      material: {fileID: 2100000, guid: 86827f0734e2dd740af14065fec5a4ec, type: 2}
+    - partName: shoes1
+      material: {fileID: 2100000, guid: 66147649be9214146932b37bc97a3c7d, type: 2}
+    - partName: human_mesh
+      material: {fileID: 2100000, guid: 9d56d4f793312a140a130af0080c156a, type: 2}
+    - partName: human_head_mesh
+      material: {fileID: 2100000, guid: 9d56d4f793312a140a130af0080c156a, type: 2}
 --- !u!1001 &54495882606799805
 PrefabInstance:
   m_ObjectHideFlags: 0
