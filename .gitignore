@@ -117,3 +117,7 @@ InitTestScene*.unity*
 /Assets/ThirdParty.meta
 /Assets/ThirdParty/simple modular human/
 /Assets/ThirdParty/simple modular human.meta
+
+# Local third-party food pack
+/Assets/ThirdParty/Mnostva Art/
+/Assets/ThirdParty/Mnostva Art.meta
