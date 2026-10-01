@@ -121,3 +121,7 @@ InitTestScene*.unity*
 # Local third-party food pack
 /Assets/ThirdParty/Mnostva Art/
 /Assets/ThirdParty/Mnostva Art.meta
+
+# Local third-party refrigerator model
+/Assets/ThirdParty/commercial-fridge/
+/Assets/ThirdParty/commercial-fridge.meta
