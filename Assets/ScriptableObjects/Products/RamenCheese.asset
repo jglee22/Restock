@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 348341b88c6b9af409442cc9db7b8ed6, type: 3}
+  m_Name: RamenCheese
+  m_EditorClassIdentifier: Assembly-CSharp::ProductDefinition
+  productId: ramen_cheese
+  displayName: "\uCE58\uC988 \uCEF5\uB77C\uBA74"
+  category: 1
+  storageType: 0
+  purchasePrice: 1300
+  baseSellPrice: 2200
+  maxShelfCount: 16
+  popularity: 0.66
+  icon: {fileID: 0}
+  productPrefab: {fileID: 4262176384019186347, guid: 4de44b83cdc52df45b6f64d01a404482, type: 3}

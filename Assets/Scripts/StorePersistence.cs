@@ -291,7 +291,7 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        if (!TryReadShelves(data.shelves, productsById, out ProductDefinition[] assignedProducts, out int[] shelfQuantities, out error))
+        if (!TryReadShelves(data.shelves, productsById, out ProductDefinition[] assignedProducts, out int[] shelfQuantities, out bool[] shelfPresent, out error))
         {
             return false;
         }
@@ -350,6 +350,7 @@ public class StorePersistence : MonoBehaviour
             prices = priceValues,
             shelfProducts = assignedProducts,
             shelfQuantities = shelfQuantities,
+            shelfPresent = shelfPresent,
             dynamicFacilities = dynamicFacilities,
             checkoutUpgradeLevel = checkoutUpgradeLevel,
             advertisingUpgradeLevel = advertisingUpgradeLevel,
@@ -367,9 +368,9 @@ public class StorePersistence : MonoBehaviour
     {
         quantities = null;
         error = string.Empty;
-        if (entries == null || entries.Count != products.Length)
+        if (entries == null || entries.Count == 0)
         {
-            error = $"{label} 항목 수가 저장 대상 상품 수와 다릅니다.";
+            error = $"{label} 항목이 없습니다.";
             return false;
         }
 
@@ -399,12 +400,6 @@ public class StorePersistence : MonoBehaviour
             quantities[IndexOfProduct(product)] = entry.quantity;
         }
 
-        if (seen.Count != products.Length)
-        {
-            error = $"{label}에 저장 대상 상품이 모두 포함되어 있지 않습니다.";
-            return false;
-        }
-
         return true;
     }
 
@@ -416,13 +411,17 @@ public class StorePersistence : MonoBehaviour
     {
         priceValues = null;
         error = string.Empty;
-        if (entries == null || entries.Count != products.Length)
+        if (entries == null || entries.Count == 0)
         {
-            error = "가격 항목 수가 저장 대상 상품 수와 다릅니다.";
+            error = "가격 항목이 없습니다.";
             return false;
         }
 
         priceValues = new int[products.Length];
+        for (int index = 0; index < products.Length; index++)
+        {
+            priceValues[index] = products[index].BaseSellPrice;
+        }
         var seen = new HashSet<string>();
         for (int index = 0; index < entries.Count; index++)
         {
@@ -454,12 +453,6 @@ public class StorePersistence : MonoBehaviour
             priceValues[IndexOfProduct(product)] = entry.currentPrice;
         }
 
-        if (seen.Count != products.Length)
-        {
-            error = "가격에 저장 대상 상품이 모두 포함되어 있지 않습니다.";
-            return false;
-        }
-
         return true;
     }
 
@@ -468,10 +461,12 @@ public class StorePersistence : MonoBehaviour
         Dictionary<string, ProductDefinition> productsById,
         out ProductDefinition[] assignedProducts,
         out int[] quantities,
+        out bool[] present,
         out string error)
     {
         assignedProducts = null;
         quantities = null;
+        present = null;
         error = string.Empty;
         if (!TryBuildShelfMap(out Dictionary<string, int> shelfIndexes))
         {
@@ -479,14 +474,15 @@ public class StorePersistence : MonoBehaviour
             return false;
         }
 
-        if (entries == null || entries.Count != shelves.Length)
+        if (entries == null || entries.Count == 0)
         {
-            error = "진열 항목 수가 저장 대상 진열 시설 수와 다릅니다.";
+            error = "진열 항목이 없습니다.";
             return false;
         }
 
         assignedProducts = new ProductDefinition[shelves.Length];
         quantities = new int[shelves.Length];
+        present = new bool[shelves.Length];
         var seen = new HashSet<string>();
         for (int index = 0; index < entries.Count; index++)
         {
@@ -514,6 +510,7 @@ public class StorePersistence : MonoBehaviour
 
                 assignedProducts[shelfIndex] = null;
                 quantities[shelfIndex] = 0;
+                present[shelfIndex] = true;
                 continue;
             }
 
@@ -537,12 +534,7 @@ public class StorePersistence : MonoBehaviour
 
             assignedProducts[shelfIndex] = product;
             quantities[shelfIndex] = entry.currentQuantity;
-        }
-
-        if (seen.Count != shelves.Length)
-        {
-            error = "저장 대상 진열 시설이 모두 포함되어 있지 않습니다.";
-            return false;
+            present[shelfIndex] = true;
         }
 
         return true;
@@ -586,6 +578,11 @@ public class StorePersistence : MonoBehaviour
 
         for (int index = 0; index < shelves.Length; index++)
         {
+            if (validated.shelfPresent == null || !validated.shelfPresent[index])
+            {
+                continue;
+            }
+
             if (!shelves[index].TryRestoreState(validated.shelfProducts[index], validated.shelfQuantities[index]))
             {
                 Debug.LogError("StorePersistence: 진열 상태 복원에 실패했습니다.", this);
@@ -924,6 +921,7 @@ public class StorePersistence : MonoBehaviour
         public int[] prices;
         public ProductDefinition[] shelfProducts;
         public int[] shelfQuantities;
+        public bool[] shelfPresent;
         public List<DynamicFacilitySaveData> dynamicFacilities;
         public int checkoutUpgradeLevel;
         public int advertisingUpgradeLevel;

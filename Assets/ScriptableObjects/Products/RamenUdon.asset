@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 348341b88c6b9af409442cc9db7b8ed6, type: 3}
+  m_Name: RamenUdon
+  m_EditorClassIdentifier: Assembly-CSharp::ProductDefinition
+  productId: ramen_udon
+  displayName: "\uC6B0\uB3D9 \uCEF5\uB77C\uBA74"
+  category: 1
+  storageType: 0
+  purchasePrice: 1100
+  baseSellPrice: 1900
+  maxShelfCount: 16
+  popularity: 0.64
+  icon: {fileID: 0}
+  productPrefab: {fileID: 2530398658822076234, guid: 85a192f3f43ac3a459d19dd6eea6c6c2, type: 3}
