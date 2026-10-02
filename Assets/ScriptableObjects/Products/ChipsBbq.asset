@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 348341b88c6b9af409442cc9db7b8ed6, type: 3}
+  m_Name: ChipsBbq
+  m_EditorClassIdentifier: Assembly-CSharp::ProductDefinition
+  productId: chips_bbq
+  displayName: "\uD1B5\uAC10\uC790\uCE69 \uBC14\uBE44\uD050"
+  category: 2
+  storageType: 0
+  purchasePrice: 900
+  baseSellPrice: 1600
+  maxShelfCount: 16
+  popularity: 0.58
+  icon: {fileID: 0}
+  productPrefab: {fileID: 6434364980181935601, guid: f1a4b265ff417ef40a57ba250ac02617, type: 3}

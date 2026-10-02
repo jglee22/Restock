@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 348341b88c6b9af409442cc9db7b8ed6, type: 3}
+  m_Name: ChipsCheese
+  m_EditorClassIdentifier: Assembly-CSharp::ProductDefinition
+  productId: chips_cheese
+  displayName: "\uAC10\uC790\uCE69 \uCE58\uC988\uB9DB"
+  category: 2
+  storageType: 0
+  purchasePrice: 900
+  baseSellPrice: 1500
+  maxShelfCount: 16
+  popularity: 0.6
+  icon: {fileID: 0}
+  productPrefab: {fileID: 5467315641415316555, guid: 7f2d18e42964bdc4ca3bb4003b9996c6, type: 3}

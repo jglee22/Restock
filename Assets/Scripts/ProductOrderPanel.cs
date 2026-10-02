@@ -5,6 +5,12 @@ using UnityEngine.UI;
 public class ProductOrderPanel : MonoBehaviour
 {
     [SerializeField] int selectedOrderQuantity = 1;
+    [SerializeField] ProductDefinition[] products;
+    [SerializeField] ProductOrderRow rowPrefab;
+    [SerializeField] RectTransform rowContent;
+    [SerializeField] StoreOrdering ordering;
+    [SerializeField] StoreInventory inventory;
+    [SerializeField] StoreEconomy economy;
     [SerializeField] ProductOrderRow[] rows;
     [SerializeField] Button quantityOneButton;
     [SerializeField] Button quantityTenButton;
@@ -15,14 +21,46 @@ public class ProductOrderPanel : MonoBehaviour
 
     public int SelectedOrderQuantity => selectedOrderQuantity;
 
+    bool rowsBuilt;
+
     void OnEnable()
     {
+        EnsureRows();
         selectedOrderQuantity = 1;
         Bind(quantityOneButton, SelectOne);
         Bind(quantityTenButton, SelectTen);
         Bind(quantityHundredButton, SelectHundred);
         ShowSelection();
         RefreshRows();
+    }
+
+    void EnsureRows()
+    {
+        if (products == null || products.Length == 0 || rowPrefab == null || rowContent == null)
+        {
+            return;
+        }
+
+        if (rowsBuilt && rows != null && rows.Length == products.Length && rows[0] != null)
+        {
+            return;
+        }
+
+        for (int index = rowContent.childCount - 1; index >= 0; index--)
+        {
+            Destroy(rowContent.GetChild(index).gameObject);
+        }
+
+        rows = new ProductOrderRow[products.Length];
+        for (int index = 0; index < products.Length; index++)
+        {
+            ProductOrderRow row = Instantiate(rowPrefab, rowContent);
+            row.name = products[index].name + "OrderRow";
+            row.Bind(products[index], this, ordering, inventory, economy);
+            rows[index] = row;
+        }
+
+        rowsBuilt = true;
     }
 
     void OnDisable()

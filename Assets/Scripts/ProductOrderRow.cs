@@ -20,6 +20,23 @@ public class ProductOrderRow : MonoBehaviour
     int shownStock = int.MinValue;
     int shownMoney = int.MinValue;
 
+    public void Bind(
+        ProductDefinition definition,
+        ProductOrderPanel panel,
+        StoreOrdering storeOrdering,
+        StoreInventory storeInventory,
+        StoreEconomy storeEconomy)
+    {
+        product = definition;
+        orderPanel = panel;
+        ordering = storeOrdering;
+        inventory = storeInventory;
+        economy = storeEconomy;
+        shownStock = int.MinValue;
+        shownMoney = int.MinValue;
+        Refresh();
+    }
+
     void OnEnable()
     {
         if (orderButton != null)
