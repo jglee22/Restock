@@ -20,6 +20,7 @@ public class CustomerMover : MonoBehaviour
 {
     const float StuckTimeout = 2f;
     const float DestinationSampleRadius = 1f;
+    const float StandReachDistance = 0.45f;
     const float ArrivalSlack = 0.15f;
     const float CertainPurchasePriceRatio = 0.5f;
     const float RejectPurchasePriceRatio = 2f;
@@ -217,13 +218,14 @@ public class CustomerMover : MonoBehaviour
 
             if (state == CustomerState.MovingToShelf)
             {
-                if (!TrySetDestination(chosenShelf.CustomerStandPoint))
+                Transform approach = ChooseStandPoint(chosenShelf);
+                if (!TrySetDestination(approach))
                 {
                     state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
                     continue;
                 }
 
-                yield return WaitUntilArrived(chosenShelf.CustomerStandPoint, acceptNearbyStop: true);
+                yield return WaitUntilArrived(approach, acceptNearbyStop: true);
                 if (moveFailed)
                 {
                     state = BeginAnotherShelfAttempt(ref retried, ref excludedShelf, chosenShelf);
@@ -575,6 +577,49 @@ public class CustomerMover : MonoBehaviour
             && shelf.CurrentQuantity > 0
             && !shelf.IsEmpty
             && shelf.CustomerStandPoint != null;
+    }
+
+    Transform ChooseStandPoint(Shelf shelf)
+    {
+        Transform front = shelf != null ? shelf.CustomerStandPoint : null;
+        Transform back = shelf != null ? shelf.CustomerStandPointBack : null;
+        bool frontReachable = IsStandReachable(front);
+        bool backReachable = IsStandReachable(back);
+        if (frontReachable && backReachable)
+        {
+            return PlanarSqrDistance(front) <= PlanarSqrDistance(back) ? front : back;
+        }
+
+        if (backReachable)
+        {
+            return back;
+        }
+
+        return front;
+    }
+
+    bool IsStandReachable(Transform point)
+    {
+        if (point == null || agent == null || !agent.isOnNavMesh)
+        {
+            return false;
+        }
+
+        if (!NavMesh.SamplePosition(point.position, out NavMeshHit hit, DestinationSampleRadius, NavMesh.AllAreas))
+        {
+            return false;
+        }
+
+        Vector3 delta = hit.position - point.position;
+        delta.y = 0f;
+        return delta.sqrMagnitude <= StandReachDistance * StandReachDistance;
+    }
+
+    float PlanarSqrDistance(Transform point)
+    {
+        Vector3 delta = point.position - transform.position;
+        delta.y = 0f;
+        return delta.sqrMagnitude;
     }
 
     bool TrySetDestination(Transform destination)

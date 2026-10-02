@@ -18,6 +18,7 @@ public class FacilityDefinition : ScriptableObject
     [SerializeField] int cost;
     [SerializeField] Vector2Int gridSize = new Vector2Int(1, 1);
     [SerializeField] GameObject prefab;
+    [SerializeField] bool requiresWall;
 
     public string FacilityId => facilityId;
     public string DisplayName => displayName;
@@ -25,6 +26,7 @@ public class FacilityDefinition : ScriptableObject
     public int Cost => cost;
     public Vector2Int GridSize => gridSize;
     public GameObject Prefab => prefab;
+    public bool RequiresWall => requiresWall;
 
     public bool TryGetAcceptedStorageType(out ProductStorageType storageType)
     {

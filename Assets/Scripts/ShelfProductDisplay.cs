@@ -6,8 +6,10 @@ public class ShelfProductDisplay : MonoBehaviour
 {
     [SerializeField] Shelf shelf;
     [SerializeField] Transform[] slots;
+    [SerializeField] Transform[] backSlots;
 
     GameObject[] shown;
+    GameObject[] shownBack;
     ProductDefinition shownProduct;
 
     void Start()
@@ -37,29 +39,55 @@ public class ShelfProductDisplay : MonoBehaviour
             return;
         }
 
-        if (shownProduct != product || shown == null || shown.Length != slots.Length)
+        bool backReady = backSlots == null || backSlots.Length == 0
+            ? shownBack == null
+            : shownBack != null && shownBack.Length == backSlots.Length;
+        if (shownProduct != product || shown == null || shown.Length != slots.Length || !backReady)
         {
             ClearShown();
-            Build(prefab);
+            shown = Build(prefab, slots);
+            shownBack = Build(prefab, backSlots);
             shownProduct = product;
         }
 
         int visibleCount = quantity < slots.Length ? quantity : slots.Length;
-        for (int index = 0; index < shown.Length; index++)
+        ApplyVisibility(shown, visibleCount);
+        int backVisibleCount = backSlots == null || quantity < backSlots.Length ? quantity : backSlots.Length;
+        if (backSlots == null)
         {
-            if (shown[index] != null)
+            backVisibleCount = 0;
+        }
+
+        ApplyVisibility(shownBack, backVisibleCount);
+    }
+
+    static void ApplyVisibility(GameObject[] instances, int visibleCount)
+    {
+        if (instances == null)
+        {
+            return;
+        }
+
+        for (int index = 0; index < instances.Length; index++)
+        {
+            if (instances[index] != null)
             {
-                shown[index].SetActive(index < visibleCount);
+                instances[index].SetActive(index < visibleCount);
             }
         }
     }
 
-    void Build(GameObject prefab)
+    static GameObject[] Build(GameObject prefab, Transform[] faceSlots)
     {
-        shown = new GameObject[slots.Length];
-        for (int index = 0; index < slots.Length; index++)
+        if (faceSlots == null || faceSlots.Length == 0)
         {
-            Transform slot = slots[index];
+            return null;
+        }
+
+        GameObject[] instances = new GameObject[faceSlots.Length];
+        for (int index = 0; index < faceSlots.Length; index++)
+        {
+            Transform slot = faceSlots[index];
             if (slot == null)
             {
                 continue;
@@ -71,32 +99,42 @@ public class ShelfProductDisplay : MonoBehaviour
             instanceTransform.localPosition = Vector3.zero;
             instanceTransform.localRotation = Quaternion.identity;
             instanceTransform.localScale = Vector3.one;
-            shown[index] = instance;
+            instances[index] = instance;
         }
+
+        return instances;
     }
 
     void ClearShown()
     {
-        if (slots != null)
-        {
-            for (int index = 0; index < slots.Length; index++)
-            {
-                Transform slot = slots[index];
-                if (slot == null)
-                {
-                    continue;
-                }
+        ClearSlotChildren(slots);
+        ClearSlotChildren(backSlots);
+        shown = null;
+        shownBack = null;
+        shownProduct = null;
+    }
 
-                for (int childIndex = slot.childCount - 1; childIndex >= 0; childIndex--)
-                {
-                    GameObject child = slot.GetChild(childIndex).gameObject;
-                    child.SetActive(false);
-                    Destroy(child);
-                }
-            }
+    static void ClearSlotChildren(Transform[] faceSlots)
+    {
+        if (faceSlots == null)
+        {
+            return;
         }
 
-        shown = null;
-        shownProduct = null;
+        for (int index = 0; index < faceSlots.Length; index++)
+        {
+            Transform slot = faceSlots[index];
+            if (slot == null)
+            {
+                continue;
+            }
+
+            for (int childIndex = slot.childCount - 1; childIndex >= 0; childIndex--)
+            {
+                GameObject child = slot.GetChild(childIndex).gameObject;
+                child.SetActive(false);
+                Destroy(child);
+            }
+        }
     }
 }
