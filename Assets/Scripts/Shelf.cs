@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // 진열대 하나의 진열 수량만 관리한다.
@@ -9,6 +10,7 @@ public class Shelf : MonoBehaviour
     [SerializeField] ProductStorageType acceptedStorageType = ProductStorageType.Shelf;
     [SerializeField] ProductDefinition assignedProduct;
     [SerializeField] Transform customerStandPoint;
+    [SerializeField] Transform customerStandPointBack;
     [SerializeField] int currentQuantity;
 
     public string SaveId => saveId;
@@ -18,6 +20,27 @@ public class Shelf : MonoBehaviour
     public ProductDefinition AssignedProduct => assignedProduct;
 
     public Transform CustomerStandPoint => customerStandPoint;
+
+    public Transform CustomerStandPointBack => customerStandPointBack;
+
+    public void CopyStandPoints(List<Transform> results)
+    {
+        if (results == null)
+        {
+            return;
+        }
+
+        results.Clear();
+        if (customerStandPoint != null)
+        {
+            results.Add(customerStandPoint);
+        }
+
+        if (customerStandPointBack != null)
+        {
+            results.Add(customerStandPointBack);
+        }
+    }
 
     public int CurrentQuantity => currentQuantity;
 

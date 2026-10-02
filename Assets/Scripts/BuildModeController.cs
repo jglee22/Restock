@@ -24,6 +24,9 @@ public class BuildModeController : MonoBehaviour
     const float OverlapPadding = 0.02f;
     const float OverlapHalfHeight = 1.1f;
     const float OverlapCenterHeight = 1.2f;
+    const float WallProbeDistance = 0.9f;
+    const float WallProbeHeight = 0.8f;
+    const float WallStandClearance = 0.25f;
 
     static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -46,6 +49,7 @@ public class BuildModeController : MonoBehaviour
     [SerializeField] Button buildButton;
     [SerializeField] GameObject buildPanel;
     [SerializeField] Button shelfButton;
+    [SerializeField] Button wallShelfButton;
     [SerializeField] Button refrigeratorButton;
     [SerializeField] Button checkoutButton;
     [SerializeField] Button moveButton;
@@ -70,6 +74,7 @@ public class BuildModeController : MonoBehaviour
     Transform placedRoot;
     readonly List<PlacedFacility> placedFacilities = new List<PlacedFacility>();
     readonly List<Vector3> accessScratch = new List<Vector3>(8);
+    readonly List<Transform> standScratch = new List<Transform>(2);
     readonly List<ProductDefinition> assignmentProducts = new List<ProductDefinition>();
     Shelf assignmentShelf;
     float cachedAgentRadius = -1f;
@@ -82,6 +87,7 @@ public class BuildModeController : MonoBehaviour
     bool warnedAccessSetup;
     GameObject preview;
     UnityEngine.Events.UnityAction selectShelf;
+    UnityEngine.Events.UnityAction selectWallShelf;
     UnityEngine.Events.UnityAction selectRefrigerator;
     UnityEngine.Events.UnityAction selectCheckout;
     UnityEngine.Events.UnityAction selectMove;
@@ -148,11 +154,14 @@ public class BuildModeController : MonoBehaviour
         selectShelf = () => SelectFacility(0);
         selectRefrigerator = () => SelectFacility(1);
         selectCheckout = () => SelectFacility(2);
+        selectWallShelf = () => SelectFacility(3);
 
         if (buildButton != null)
             buildButton.onClick.AddListener(EnterBuildMode);
         if (shelfButton != null)
             shelfButton.onClick.AddListener(selectShelf);
+        if (wallShelfButton != null)
+            wallShelfButton.onClick.AddListener(selectWallShelf);
         if (refrigeratorButton != null)
             refrigeratorButton.onClick.AddListener(selectRefrigerator);
         selectMove = BeginMoveSelect;
@@ -186,6 +195,8 @@ public class BuildModeController : MonoBehaviour
             buildButton.onClick.RemoveListener(EnterBuildMode);
         if (shelfButton != null)
             shelfButton.onClick.RemoveListener(selectShelf);
+        if (wallShelfButton != null)
+            wallShelfButton.onClick.RemoveListener(selectWallShelf);
         if (refrigeratorButton != null)
             refrigeratorButton.onClick.RemoveListener(selectRefrigerator);
         if (checkoutButton != null)
@@ -502,6 +513,12 @@ public class BuildModeController : MonoBehaviour
             if (OverlapsStaticCollider(center, footprint))
             {
                 error = $"{definition.FacilityId} ({origin.x}, {origin.y})가 기존 시설이나 벽과 겹칩니다.";
+                return false;
+            }
+
+            if (!SavedWallFacingValid(definition, origin, footprint, record.rotationQuarterTurns))
+            {
+                error = $"{definition.FacilityId} ({origin.x}, {origin.y})는 등이 벽을 향하고 진열면이 매장 안쪽이어야 합니다.";
                 return false;
             }
         }
@@ -1054,7 +1071,67 @@ public class BuildModeController : MonoBehaviour
             return false;
 
         return ExistingPointsClearOfFootprint(center, footprint, radius, false)
-            && PreviewPointsClear(radius);
+            && PreviewPointsClear(radius)
+            && PreviewWallFacingValid();
+    }
+
+    bool PreviewWallFacingValid()
+    {
+        if (selected == null || !selected.RequiresWall)
+            return true;
+
+        if (preview == null)
+            return false;
+
+        Shelf shelf = preview.GetComponent<Shelf>();
+        if (shelf == null || shelf.CustomerStandPoint == null)
+            return false;
+
+        return StandFacesAwayFromWall(shelf.transform.position, shelf.CustomerStandPoint.position);
+    }
+
+    bool SavedWallFacingValid(FacilityDefinition definition, Vector2Int origin, Vector2Int footprint, int quarterTurns)
+    {
+        if (definition == null || !definition.RequiresWall)
+            return true;
+
+        GameObject prefab = definition.Prefab;
+        Shelf shelf = prefab != null ? prefab.GetComponent<Shelf>() : null;
+        if (prefab == null || shelf == null || shelf.CustomerStandPoint == null)
+            return false;
+
+        Quaternion rotation = prefab.transform.rotation * Quaternion.Euler(0f, PlacedFacility.NormalizeQuarterTurns(quarterTurns) * 90f, 0f);
+        Vector3 center = FootprintCenter(origin, footprint);
+        Vector3 stand = SavedAccessWorld(prefab, rotation, center, shelf.CustomerStandPoint);
+        return StandFacesAwayFromWall(center, stand);
+    }
+
+    bool StandFacesAwayFromWall(Vector3 shelfPosition, Vector3 standPosition)
+    {
+        Vector3 back = shelfPosition - standPosition;
+        back.y = 0f;
+        if (back.sqrMagnitude < 0.0001f)
+            return false;
+
+        back.Normalize();
+        Vector3 origin = shelfPosition + Vector3.up * WallProbeHeight;
+        if (!Physics.Raycast(origin, back, out RaycastHit hit, WallProbeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return false;
+
+        if (hit.collider == null || hit.collider == buildSurface)
+            return false;
+        if (preview != null && hit.transform.IsChildOf(preview.transform))
+            return false;
+        if (movingFacility != null && hit.transform.IsChildOf(movingFacility.transform))
+            return false;
+        if (hit.collider.GetComponentInParent<PlacedFacility>() != null)
+            return false;
+        if (hit.collider.GetComponentInParent<Shelf>() != null)
+            return false;
+
+        Vector3 toStand = standPosition - hit.point;
+        toStand.y = 0f;
+        return Vector3.Dot(toStand, hit.normal) > WallStandClearance;
     }
 
     bool SavedAccessClear(List<StorePersistence.DynamicFacilitySaveData> records, out string error)
@@ -1155,15 +1232,19 @@ public class BuildModeController : MonoBehaviour
                 if (shelf == null || SkipAccessOwner(shelf, ignoreDynamic))
                     continue;
 
-                Transform standPoint = shelf.CustomerStandPoint;
-                if (standPoint == null)
+                standScratch.Clear();
+                shelf.CopyStandPoints(standScratch);
+                if (standScratch.Count == 0)
                 {
                     WarnAccessSetup("BuildModeController: CustomerStandPoint가 없는 진열대가 있습니다.");
                     return false;
                 }
 
-                if (!ClearsFootprint(standPoint.position, center, footprint, radius))
-                    return false;
+                for (int pointIndex = 0; pointIndex < standScratch.Count; pointIndex++)
+                {
+                    if (!ClearsFootprint(standScratch[pointIndex].position, center, footprint, radius))
+                        return false;
+                }
             }
         }
 
@@ -1234,15 +1315,23 @@ public class BuildModeController : MonoBehaviour
         }
 
         Shelf shelf = preview.GetComponent<Shelf>();
-        if (shelf == null || shelf.CustomerStandPoint == null)
+        standScratch.Clear();
+        if (shelf != null)
+            shelf.CopyStandPoints(standScratch);
+        if (shelf == null || standScratch.Count == 0)
         {
             WarnAccessSetup("BuildModeController: 배치할 진열대에 CustomerStandPoint가 없습니다.");
             return false;
         }
 
-        Vector3 stand = shelf.CustomerStandPoint.position;
-        return !AccessPointBlocked(stand, radius, false)
-            && AccessOnWalkableMesh(stand, movingFacility != null, false);
+        for (int index = 0; index < standScratch.Count; index++)
+        {
+            Vector3 stand = standScratch[index].position;
+            if (AccessPointBlocked(stand, radius, false) || !AccessOnWalkableMesh(stand, movingFacility != null, false))
+                return false;
+        }
+
+        return true;
     }
 
     bool TryFillSavedAccess(FacilityDefinition definition, Vector2Int origin, Vector2Int footprint, int quarterTurns)
@@ -1279,13 +1368,17 @@ public class BuildModeController : MonoBehaviour
         }
 
         Shelf shelf = prefab.GetComponent<Shelf>();
-        if (shelf == null || shelf.CustomerStandPoint == null)
+        standScratch.Clear();
+        if (shelf != null)
+            shelf.CopyStandPoints(standScratch);
+        if (shelf == null || standScratch.Count == 0)
         {
             WarnAccessSetup("BuildModeController: 저장할 진열대에 CustomerStandPoint가 없습니다.");
             return false;
         }
 
-        accessScratch.Add(SavedAccessWorld(prefab, rotation, center, shelf.CustomerStandPoint));
+        for (int index = 0; index < standScratch.Count; index++)
+            accessScratch.Add(SavedAccessWorld(prefab, rotation, center, standScratch[index]));
         return true;
     }
 
@@ -1739,6 +1832,7 @@ public class BuildModeController : MonoBehaviour
         SetFacilityButtonLabel(shelfButton, 0, "진열대");
         SetFacilityButtonLabel(refrigeratorButton, 1, "냉장고");
         SetFacilityButtonLabel(checkoutButton, 2, "계산대");
+        SetFacilityButtonLabel(wallShelfButton, 3, "벽 진열대");
     }
 
     void SetFacilityButtonLabel(Button button, int index, string fallbackName)
