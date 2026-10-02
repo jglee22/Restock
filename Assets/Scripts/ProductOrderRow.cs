@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class ProductOrderRow : MonoBehaviour
 {
     [SerializeField] ProductDefinition product;
-    [SerializeField] int orderQuantity = 1;
+    [SerializeField] ProductOrderPanel orderPanel;
     [SerializeField] StoreOrdering ordering;
     [SerializeField] StoreInventory inventory;
     [SerializeField] StoreEconomy economy;
@@ -75,7 +75,7 @@ public class ProductOrderRow : MonoBehaviour
 
         if (orderButton != null && ordering != null)
         {
-            bool canOrder = ordering.CanOrder(product, orderQuantity);
+            bool canOrder = ordering.CanOrder(product, OrderQuantity);
             if (orderButton.interactable != canOrder)
             {
                 orderButton.interactable = canOrder;
@@ -90,15 +90,17 @@ public class ProductOrderRow : MonoBehaviour
             return;
         }
 
-        ordering.TryOrder(product, orderQuantity);
+        ordering.TryOrder(product, OrderQuantity);
         Refresh();
     }
 
+    int OrderQuantity => orderPanel != null ? orderPanel.SelectedOrderQuantity : 1;
+
     void OnValidate()
     {
-        if (orderQuantity < 1)
+        if (orderPanel == null)
         {
-            Debug.LogWarning($"ProductOrderRow: Order Quantity는 1 이상이어야 합니다. 현재 값: {orderQuantity}", this);
+            Debug.LogWarning("ProductOrderRow: ProductOrderPanel이 연결되지 않았습니다.", this);
         }
 
         if (product == null)
@@ -122,13 +124,14 @@ public class ProductOrderRow : MonoBehaviour
 
     string OrderButtonLabel()
     {
+        int quantity = OrderQuantity;
         int price = product != null ? product.PurchasePrice : 0;
-        if (price < 0 || orderQuantity < 1 || (price > 0 && orderQuantity > int.MaxValue / price))
+        if (price < 0 || quantity < 1 || (price > 0 && quantity > int.MaxValue / price))
         {
-            return orderQuantity.ToString(CultureInfo.InvariantCulture) + "개";
+            return "주문";
         }
 
-        return orderQuantity.ToString(CultureInfo.InvariantCulture) + "개 " + FormatWon(price * orderQuantity);
+        return "주문 " + FormatWon(price * quantity);
     }
 
     static string FormatWon(int amount)
