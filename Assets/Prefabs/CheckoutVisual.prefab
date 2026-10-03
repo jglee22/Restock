@@ -92,10 +92,18 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -8641391126842829773, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 993a033e1dc3acf46a5da7ea759f1e5a, type: 2}
     - target: {fileID: -8391222552659086748, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
       propertyPath: m_Name
       value: CounterBody
       objectReference: {fileID: 0}
+    - target: {fileID: -6675296767764453791, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 632a8bf45c06510468cb1e65f4f871dc, type: 2}
     - target: {fileID: -6372386368715102780, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
       propertyPath: m_Name
       value: WorkSurface
@@ -104,6 +112,26 @@ PrefabInstance:
       propertyPath: m_Name
       value: Register
       objectReference: {fileID: 0}
+    - target: {fileID: -4683669308469848369, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 92f10238d72342949335b5b580965a61, type: 2}
+    - target: {fileID: -4683669308469848369, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 632a8bf45c06510468cb1e65f4f871dc, type: 2}
+    - target: {fileID: -3881046381831827383, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 632a8bf45c06510468cb1e65f4f871dc, type: 2}
+    - target: {fileID: -2205019744839673622, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 632a8bf45c06510468cb1e65f4f871dc, type: 2}
+    - target: {fileID: -2205019744839673622, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: c98c03f6476223347b07ff037c67d80f, type: 2}
     - target: {fileID: -1970261715653630700, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
       propertyPath: m_Name
       value: CounterTop
@@ -120,10 +148,18 @@ PrefabInstance:
       propertyPath: m_Name
       value: SideDisplay
       objectReference: {fileID: 0}
+    - target: {fileID: 1377205819007677701, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 92f10238d72342949335b5b580965a61, type: 2}
     - target: {fileID: 2677352972872265170, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
       propertyPath: m_Name
       value: CounterBase
       objectReference: {fileID: 0}
+    - target: {fileID: 7941061856946474811, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 632a8bf45c06510468cb1e65f4f871dc, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects:
     - {fileID: 7045030354117346258, guid: db0c3e4b7b452cf4da0a2d4d1bfadc3c, type: 3}
