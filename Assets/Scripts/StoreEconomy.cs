@@ -5,7 +5,7 @@ using UnityEngine;
 public class StoreEconomy : MonoBehaviour
 {
     [SerializeField] StoreSession session;
-    [SerializeField] int startingMoney = 500000;
+    [SerializeField] int startingMoney = 0;
 
     int currentMoney;
     int dailyRevenue;

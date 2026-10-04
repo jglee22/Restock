@@ -21,6 +21,8 @@ public class StoreSession : MonoBehaviour
     const int MaxHour = 23;
     const int MaxMinute = 59;
     const float MinimumRealSecondsPerGameMinute = 0.01f;
+    const float TargetFullDayRealSeconds = 360f;
+    const float ScheduledDayGameMinutes = 14f * MinutesPerHour;
 
     [SerializeField] int openingHour = 8;
     [SerializeField] int openingMinute = 0;
@@ -28,7 +30,7 @@ public class StoreSession : MonoBehaviour
     [SerializeField] int closingMinute = 0;
     [SerializeField] int skipHour = 21;
     [SerializeField] int skipMinute = 50;
-    [SerializeField] float realSecondsPerGameMinute = 1f;
+    [SerializeField] float realSecondsPerGameMinute = TargetFullDayRealSeconds / ScheduledDayGameMinutes;
     [SerializeField] StoreEventSystem eventSystem;
 
     StorePhase phase = StorePhase.Preparation;
