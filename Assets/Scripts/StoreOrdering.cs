@@ -64,6 +64,16 @@ public class StoreOrdering : MonoBehaviour
             return false;
         }
 
+        if (StoreProgression.Instance != null && !StoreProgression.Instance.IsProductUnlocked(product))
+        {
+            if (report)
+            {
+                Debug.LogWarning($"StoreOrdering: 아직 주문할 수 없는 상품입니다. 상품: {product.DisplayName}", this);
+            }
+
+            return false;
+        }
+
         if (quantity <= 0)
         {
             if (report)

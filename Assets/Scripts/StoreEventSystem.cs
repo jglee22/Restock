@@ -123,6 +123,24 @@ public class StoreEventSystem : MonoBehaviour
         int rush = NonNegativeWeight(rushHourWeight, "Rush Hour");
         int delay = NonNegativeWeight(checkoutDelayWeight, "Checkout Delay");
         int trend = NonNegativeWeight(productTrendWeight, "Product Trend");
+        StoreProgression progress = StoreProgression.Instance;
+        if (progress != null)
+        {
+            if (!progress.AllowsEvent(StoreEventType.RushHour))
+            {
+                rush = 0;
+            }
+
+            if (!progress.AllowsEvent(StoreEventType.CheckoutDelay))
+            {
+                delay = 0;
+            }
+
+            if (!progress.AllowsEvent(StoreEventType.ProductTrend))
+            {
+                trend = 0;
+            }
+        }
         int total = none + rush + delay + trend;
         eventRolled = true;
         rolledDay = day;
@@ -207,11 +225,12 @@ public class StoreEventSystem : MonoBehaviour
             return false;
         }
 
+        Shelf[] shelves = Object.FindObjectsByType<Shelf>(FindObjectsSortMode.None);
         int count = inventory.ProductDefinitionCount;
         int validCount = 0;
         for (int index = 0; index < count; index++)
         {
-            if (inventory.GetProductDefinition(index) != null)
+            if (CanTrend(inventory.GetProductDefinition(index), shelves))
             {
                 validCount += 1;
             }
@@ -226,7 +245,7 @@ public class StoreEventSystem : MonoBehaviour
         for (int index = 0; index < count; index++)
         {
             ProductDefinition candidate = inventory.GetProductDefinition(index);
-            if (candidate == null)
+            if (!CanTrend(candidate, shelves))
             {
                 continue;
             }
@@ -238,6 +257,35 @@ public class StoreEventSystem : MonoBehaviour
             }
 
             pick -= 1;
+        }
+
+        return false;
+    }
+
+    static bool CanTrend(ProductDefinition product, Shelf[] shelves)
+    {
+        if (product == null)
+        {
+            return false;
+        }
+
+        if (StoreProgression.Instance != null && !StoreProgression.Instance.IsProductUnlocked(product))
+        {
+            return false;
+        }
+
+        if (shelves == null)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < shelves.Length; index++)
+        {
+            Shelf shelf = shelves[index];
+            if (shelf != null && shelf.AssignedProduct == product)
+            {
+                return true;
+            }
         }
 
         return false;

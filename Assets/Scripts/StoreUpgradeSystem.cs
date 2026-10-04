@@ -84,6 +84,20 @@ public class StoreUpgradeSystem : MonoBehaviour
         return config.levelCosts.Length;
     }
 
+    public int GetPurchaseLimit(StoreUpgradeType type)
+    {
+        int configured = GetMaxLevel(type);
+        int cap = StoreProgression.Instance != null ? StoreProgression.Instance.UpgradeLevelCap : configured;
+        return Mathf.Min(configured, cap);
+    }
+
+    public bool HasAvailablePurchase()
+    {
+        return GetLevel(StoreUpgradeType.FastCheckout) < GetPurchaseLimit(StoreUpgradeType.FastCheckout)
+            || GetLevel(StoreUpgradeType.Advertising) < GetPurchaseLimit(StoreUpgradeType.Advertising)
+            || GetLevel(StoreUpgradeType.WordOfMouth) < GetPurchaseLimit(StoreUpgradeType.WordOfMouth);
+    }
+
     public float GetLevelMultiplier(StoreUpgradeType type)
     {
         return MultiplierFor(ConfigFor(type), GetLevel(type));
@@ -93,7 +107,7 @@ public class StoreUpgradeSystem : MonoBehaviour
     {
         multiplier = 1f;
         int level = GetLevel(type);
-        if (level >= GetMaxLevel(type))
+        if (level >= GetPurchaseLimit(type))
         {
             return false;
         }
@@ -120,7 +134,7 @@ public class StoreUpgradeSystem : MonoBehaviour
         cost = 0;
         UpgradeConfig config = ConfigFor(type);
         int level = GetLevel(type);
-        if (config == null || config.levelCosts == null || level < 0 || level >= config.levelCosts.Length)
+        if (config == null || config.levelCosts == null || level < 0 || level >= GetPurchaseLimit(type))
         {
             return false;
         }

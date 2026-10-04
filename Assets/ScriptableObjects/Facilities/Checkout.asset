@@ -18,3 +18,5 @@ MonoBehaviour:
   cost: 50000
   gridSize: {x: 3, y: 1}
   prefab: {fileID: 100000, guid: 60f260d8ad354831b6b56c846b45c575, type: 3}
+  requiresWall: 0
+  unlockStage: 4

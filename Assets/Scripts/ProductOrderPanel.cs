@@ -41,7 +41,8 @@ public class ProductOrderPanel : MonoBehaviour
             return;
         }
 
-        if (rowsBuilt && rows != null && rows.Length == products.Length && rows[0] != null)
+        int unlockedCount = CountUnlockedProducts();
+        if (rowsBuilt && rows != null && rows.Length == unlockedCount && (unlockedCount == 0 || rows[0] != null))
         {
             return;
         }
@@ -51,16 +52,43 @@ public class ProductOrderPanel : MonoBehaviour
             Destroy(rowContent.GetChild(index).gameObject);
         }
 
-        rows = new ProductOrderRow[products.Length];
+        rows = new ProductOrderRow[unlockedCount];
+        int rowIndex = 0;
         for (int index = 0; index < products.Length; index++)
         {
+            if (!IsUnlocked(products[index]))
+            {
+                continue;
+            }
+
             ProductOrderRow row = Instantiate(rowPrefab, rowContent);
             row.name = products[index].name + "OrderRow";
             row.Bind(products[index], this, ordering, inventory, economy);
-            rows[index] = row;
+            rows[rowIndex] = row;
+            rowIndex += 1;
         }
 
         rowsBuilt = true;
+    }
+
+    int CountUnlockedProducts()
+    {
+        int count = 0;
+        for (int index = 0; index < products.Length; index++)
+        {
+            if (IsUnlocked(products[index]))
+            {
+                count += 1;
+            }
+        }
+
+        return count;
+    }
+
+    static bool IsUnlocked(ProductDefinition product)
+    {
+        return product != null
+            && (StoreProgression.Instance == null || StoreProgression.Instance.IsProductUnlocked(product));
     }
 
     void OnDisable()

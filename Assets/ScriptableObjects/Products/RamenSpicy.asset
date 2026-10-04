@@ -20,5 +20,6 @@ MonoBehaviour:
   baseSellPrice: 1900
   maxShelfCount: 16
   popularity: 0.68
+  unlockStage: 1
   icon: {fileID: 0}
   productPrefab: {fileID: 1593633040105998832, guid: 445c2e0353482804083a622e0027c02f, type: 3}

@@ -72,6 +72,13 @@ public class Shelf : MonoBehaviour
         return true;
     }
 
+    public void ClearDisplay()
+    {
+        assignedProduct = null;
+        currentQuantity = 0;
+        RefreshProductDisplay();
+    }
+
     public bool BindInventory(StoreInventory inventory)
     {
         if (inventory == null)

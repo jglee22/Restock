@@ -19,6 +19,7 @@ public class FacilityDefinition : ScriptableObject
     [SerializeField] Vector2Int gridSize = new Vector2Int(1, 1);
     [SerializeField] GameObject prefab;
     [SerializeField] bool requiresWall;
+    [SerializeField] int unlockStage;
 
     public string FacilityId => facilityId;
     public string DisplayName => displayName;
@@ -27,6 +28,7 @@ public class FacilityDefinition : ScriptableObject
     public Vector2Int GridSize => gridSize;
     public GameObject Prefab => prefab;
     public bool RequiresWall => requiresWall;
+    public int UnlockStage => unlockStage;
 
     public bool TryGetAcceptedStorageType(out ProductStorageType storageType)
     {
@@ -56,6 +58,11 @@ public class FacilityDefinition : ScriptableObject
         if (cost < 0)
         {
             Debug.LogWarning($"FacilityDefinition: Cost는 0 이상이어야 합니다. 현재 값: {cost}", this);
+        }
+
+        if (unlockStage < 0)
+        {
+            unlockStage = 0;
         }
 
         if (gridSize.x <= 0 || gridSize.y <= 0)

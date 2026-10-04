@@ -17,6 +17,8 @@ public class ProductPriceRow : MonoBehaviour
     [SerializeField] Button decreaseButton;
     [SerializeField] Button increaseButton;
 
+    public ProductDefinition Product => product;
+
     int shownPrice = int.MinValue;
     bool started;
 

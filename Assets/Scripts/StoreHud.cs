@@ -17,6 +17,7 @@ public class StoreHud : MonoBehaviour
     [SerializeField] CustomerSpawner customerSpawner;
     [SerializeField] StoreEventSystem eventSystem;
     [SerializeField] StoreUpgradeSystem upgradeSystem;
+    [SerializeField] StoreProgression progression;
     [SerializeField] BuildModeController buildMode;
     [SerializeField] Button upgradeButton;
     [SerializeField] GameObject upgradePanel;
@@ -28,6 +29,7 @@ public class StoreHud : MonoBehaviour
     [SerializeField] TMP_Text timeText;
     [SerializeField] TMP_Text phaseText;
     [SerializeField] TMP_Text moneyText;
+    [SerializeField] TMP_Text goalText;
     [SerializeField] TMP_Text resultText;
     [SerializeField] TMP_Text eventText;
 
@@ -58,6 +60,13 @@ public class StoreHud : MonoBehaviour
     StorePhase displayedPhase;
     TMP_Text skipTimeLabel;
     int displayedMoney = int.MinValue;
+    int displayedGoalRevenue = int.MinValue;
+    int displayedGoalStage = int.MinValue;
+    bool displayedGoalComplete;
+    int appliedUnlockStage = int.MinValue;
+    bool appliedUnlockComplete;
+    TMP_Text nextDayLabel;
+    string defaultNextDayLabel;
     bool suppressNextBanner;
     int moneyPulseVersion;
     int bannerVersion;
@@ -183,6 +192,12 @@ public class StoreHud : MonoBehaviour
         RefreshSpeedIndicators();
         RefreshEvent();
         RefreshMoney();
+        RefreshGoal();
+        ApplyUnlockFilters();
+        RefreshNextDayLabel();
+        SetButtonVisible(
+            upgradeButton,
+            session.Phase == StorePhase.Preparation && (upgradeSystem == null || upgradeSystem.HasAvailablePurchase()));
         RefreshLoadButton();
         if (session.Phase != StorePhase.Preparation && IsWorkPanelOpen(upgradePanel))
         {
@@ -256,7 +271,9 @@ public class StoreHud : MonoBehaviour
         SetButtonVisible(priceToggleButton, session.Phase == StorePhase.Preparation);
         SetButtonVisible(restockShelvesButton, session.Phase == StorePhase.Preparation || session.Phase == StorePhase.Open);
         SetObjectVisible(saveLoadPanel, session.Phase == StorePhase.Preparation);
-        SetButtonVisible(upgradeButton, session.Phase == StorePhase.Preparation);
+        SetButtonVisible(
+            upgradeButton,
+            session.Phase == StorePhase.Preparation && (upgradeSystem == null || upgradeSystem.HasAvailablePurchase()));
         if (session.Phase != StorePhase.Preparation)
         {
             SetWorkPanelVisible(upgradePanel, false);
@@ -392,6 +409,11 @@ public class StoreHud : MonoBehaviour
                     continue;
                 }
 
+                if (soldQuantity == 0 && Progression != null && !Progression.IsProductUnlocked(product))
+                {
+                    continue;
+                }
+
                 string productName = string.IsNullOrEmpty(product.DisplayName) ? product.name : product.DisplayName;
                 builder.Append('\n');
                 builder.Append(productName).Append(' ');
@@ -402,7 +424,118 @@ public class StoreHud : MonoBehaviour
 
         builder.Append("\n\n[이벤트]\n");
         builder.Append(eventSystem != null ? eventSystem.ResultLabel : "오늘의 이벤트: 없음");
+        if (Progression != null)
+        {
+            Progression.AppendResult(builder);
+        }
+
         SetText(resultText, builder.ToString());
+    }
+
+    StoreProgression Progression => progression != null ? progression : StoreProgression.Instance;
+
+    void RefreshGoal()
+    {
+        EnsureGoalText();
+        if (goalText == null || economy == null || Progression == null)
+        {
+            return;
+        }
+
+        int revenue = economy.DailyRevenue;
+        int stage = Progression.CompletedStage;
+        bool complete = Progression.ShowsCampaignComplete;
+        if (revenue == displayedGoalRevenue && stage == displayedGoalStage && complete == displayedGoalComplete)
+        {
+            return;
+        }
+
+        displayedGoalRevenue = revenue;
+        displayedGoalStage = stage;
+        displayedGoalComplete = complete;
+        SetText(goalText, Progression.HudLabel(revenue));
+    }
+
+    void EnsureGoalText()
+    {
+        if (goalText != null || moneyText == null)
+        {
+            return;
+        }
+
+        GameObject copy = Instantiate(moneyText.gameObject, moneyText.transform.parent);
+        copy.name = "GoalText";
+        goalText = copy.GetComponent<TMP_Text>();
+        RectTransform source = moneyText.rectTransform;
+        RectTransform target = goalText.rectTransform;
+        target.anchorMin = source.anchorMin;
+        target.anchorMax = source.anchorMax;
+        target.pivot = source.pivot;
+        target.sizeDelta = source.sizeDelta;
+        target.anchoredPosition = source.anchoredPosition + new Vector2(0f, -(source.sizeDelta.y + 6f));
+    }
+
+    void ApplyUnlockFilters()
+    {
+        if (Progression == null)
+        {
+            return;
+        }
+
+        int stage = Progression.CompletedStage;
+        bool complete = Progression.IsCampaignComplete;
+        if (stage == appliedUnlockStage && complete == appliedUnlockComplete)
+        {
+            return;
+        }
+
+        appliedUnlockStage = stage;
+        appliedUnlockComplete = complete;
+        if (pricePanel == null)
+        {
+            return;
+        }
+
+        ProductPriceRow[] priceRows = pricePanel.GetComponentsInChildren<ProductPriceRow>(true);
+        for (int index = 0; index < priceRows.Length; index++)
+        {
+            ProductPriceRow row = priceRows[index];
+            if (row == null)
+            {
+                continue;
+            }
+
+            bool visible = Progression.IsProductUnlocked(row.Product);
+            if (row.gameObject.activeSelf != visible)
+            {
+                row.gameObject.SetActive(visible);
+            }
+        }
+    }
+
+    void RefreshNextDayLabel()
+    {
+        if (nextDayButton == null || session == null || session.Phase != StorePhase.Result)
+        {
+            return;
+        }
+
+        if (nextDayLabel == null)
+        {
+            nextDayLabel = nextDayButton.GetComponentInChildren<TMP_Text>(true);
+            if (nextDayLabel != null && string.IsNullOrEmpty(defaultNextDayLabel))
+            {
+                defaultNextDayLabel = nextDayLabel.text;
+            }
+        }
+
+        if (nextDayLabel == null)
+        {
+            return;
+        }
+
+        bool continuePlay = Progression != null && Progression.ShowsCampaignComplete;
+        SetText(nextDayLabel, continuePlay ? "계속 플레이" : defaultNextDayLabel);
     }
 
     static string PhaseLabel(StorePhase phase)
@@ -1059,7 +1192,7 @@ public class StoreHud : MonoBehaviour
             UpgradeRowWidgets row = upgradeRows[index];
             StoreUpgradeType type = row.type;
             int level = upgradeSystem.GetLevel(type);
-            int maxLevel = upgradeSystem.GetMaxLevel(type);
+            int maxLevel = upgradeSystem.GetPurchaseLimit(type);
             shownUpgradeLevels[index] = level;
             SetText(row.titleText, upgradeSystem.GetDisplayName(type));
             SetText(row.levelText, "Lv " + level.ToString(CultureInfo.InvariantCulture) + " / " + maxLevel.ToString(CultureInfo.InvariantCulture));

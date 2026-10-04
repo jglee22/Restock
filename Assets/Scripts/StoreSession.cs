@@ -32,6 +32,7 @@ public class StoreSession : MonoBehaviour
     [SerializeField] int skipMinute = 50;
     [SerializeField] float realSecondsPerGameMinute = TargetFullDayRealSeconds / ScheduledDayGameMinutes;
     [SerializeField] StoreEventSystem eventSystem;
+    [SerializeField] StoreProgression progression;
 
     StorePhase phase = StorePhase.Preparation;
     int day = 1;
@@ -138,6 +139,7 @@ public class StoreSession : MonoBehaviour
             return;
         }
 
+        Progression?.EvaluateDay();
         phase = StorePhase.Result;
         Time.timeScale = NormalTimeScale;
     }
@@ -150,6 +152,7 @@ public class StoreSession : MonoBehaviour
             return;
         }
 
+        Progression?.CommitDay();
         day += 1;
         currentGameMinutes = OpeningTotalMinutes;
         phase = StorePhase.Preparation;
@@ -261,8 +264,10 @@ public class StoreSession : MonoBehaviour
 
         phase = StorePhase.Closing;
         isPaused = false;
-        Time.timeScale = NormalTimeScale;
+        Time.timeScale = playingTimeScale;
     }
+
+    StoreProgression Progression => progression != null ? progression : StoreProgression.Instance;
 
     bool HasValidSchedule => ClosingTotalMinutes > OpeningTotalMinutes;
 

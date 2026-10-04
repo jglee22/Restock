@@ -10,7 +10,8 @@ public class StorePersistence : MonoBehaviour
     const int LegacySaveVersion = 1;
     const int LayoutSaveVersion = 2;
     const int ProductSaveVersion = 3;
-    const int SaveVersion = 4;
+    const int UpgradeSaveVersion = 4;
+    const int SaveVersion = 5;
     const string SaveFileName = "restock_save.json";
 
     [SerializeField] StoreSession session;
@@ -22,6 +23,7 @@ public class StorePersistence : MonoBehaviour
     [SerializeField] Shelf[] shelves;
     [SerializeField] BuildModeController buildMode;
     [SerializeField] StoreUpgradeSystem upgradeSystem;
+    [SerializeField] StoreProgression progression;
 
     public bool SaveFileExists => File.Exists(SaveFilePath);
 
@@ -239,7 +241,8 @@ public class StorePersistence : MonoBehaviour
             dynamicFacilities = dynamicFacilities,
             checkoutUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.FastCheckout),
             advertisingUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.Advertising),
-            trafficUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.WordOfMouth)
+            trafficUpgradeLevel = upgradeSystem.GetLevel(StoreUpgradeType.WordOfMouth),
+            completedProgressionStage = CurrentProgressionStage()
         };
         return true;
     }
@@ -257,6 +260,7 @@ public class StorePersistence : MonoBehaviour
         if (data.version != LegacySaveVersion
             && data.version != LayoutSaveVersion
             && data.version != ProductSaveVersion
+            && data.version != UpgradeSaveVersion
             && data.version != SaveVersion)
         {
             error = $"지원하지 않는 저장 버전입니다. 파일 버전: {data.version}";
@@ -321,7 +325,7 @@ public class StorePersistence : MonoBehaviour
         int checkoutUpgradeLevel = 0;
         int advertisingUpgradeLevel = 0;
         int trafficUpgradeLevel = 0;
-        if (data.version == SaveVersion)
+        if (data.version == UpgradeSaveVersion || data.version == SaveVersion)
         {
             if (upgradeSystem == null)
             {
@@ -354,8 +358,18 @@ public class StorePersistence : MonoBehaviour
             dynamicFacilities = dynamicFacilities,
             checkoutUpgradeLevel = checkoutUpgradeLevel,
             advertisingUpgradeLevel = advertisingUpgradeLevel,
-            trafficUpgradeLevel = trafficUpgradeLevel
+            trafficUpgradeLevel = trafficUpgradeLevel,
+            completedProgressionStage = data.version >= SaveVersion
+                ? data.completedProgressionStage
+                : StoreProgression.CampaignCompletedStage
         };
+        if (validated.completedProgressionStage < 0
+            || validated.completedProgressionStage > StoreProgression.CampaignCompletedStage)
+        {
+            error = $"진행 단계가 올바르지 않습니다. 현재 값: {validated.completedProgressionStage}";
+            validated = null;
+            return false;
+        }
         return true;
     }
 
@@ -542,6 +556,13 @@ public class StorePersistence : MonoBehaviour
 
     bool ApplyValidatedSave(ValidatedSave validated)
     {
+        StoreProgression progress = progression != null ? progression : StoreProgression.Instance;
+        if (progress == null || !progress.TryRestoreCompletedStage(validated.completedProgressionStage))
+        {
+            Debug.LogError("StorePersistence: 진행 단계 복원에 실패했습니다.", this);
+            return false;
+        }
+
         if (!economy.TryRestoreState(validated.currentMoney, validated.dailyRevenue, validated.dailyExpense))
         {
             Debug.LogError("StorePersistence: 경제 상태 복원에 실패했습니다.", this);
@@ -876,6 +897,7 @@ public class StorePersistence : MonoBehaviour
         public int checkoutUpgradeLevel;
         public int advertisingUpgradeLevel;
         public int trafficUpgradeLevel;
+        public int completedProgressionStage;
     }
 
     [Serializable]
@@ -926,6 +948,13 @@ public class StorePersistence : MonoBehaviour
         public int checkoutUpgradeLevel;
         public int advertisingUpgradeLevel;
         public int trafficUpgradeLevel;
+        public int completedProgressionStage;
+    }
+
+    int CurrentProgressionStage()
+    {
+        StoreProgression progress = progression != null ? progression : StoreProgression.Instance;
+        return progress != null ? progress.CompletedStage : 0;
     }
 
     bool IsUpgradeLevelValid(StoreUpgradeType type, int level, out string error)

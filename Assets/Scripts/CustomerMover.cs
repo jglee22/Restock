@@ -576,7 +576,8 @@ public class CustomerMover : MonoBehaviour
             && !attemptedProducts.Contains(shelf.AssignedProduct)
             && shelf.CurrentQuantity > 0
             && !shelf.IsEmpty
-            && shelf.CustomerStandPoint != null;
+            && shelf.CustomerStandPoint != null
+            && (StoreProgression.Instance == null || StoreProgression.Instance.IsProductUnlocked(shelf.AssignedProduct));
     }
 
     Transform ChooseStandPoint(Shelf shelf)

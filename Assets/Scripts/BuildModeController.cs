@@ -238,8 +238,10 @@ public class BuildModeController : MonoBehaviour
     void Update()
     {
         bool preparation = IsPreparation();
+        bool anyFacility = StoreProgression.Instance == null || StoreProgression.Instance.HasUnlockedFacility(facilities);
         if (buildButton != null)
-            buildButton.gameObject.SetActive(preparation);
+            buildButton.gameObject.SetActive(preparation && anyFacility);
+        ApplyFacilityButtonVisibility();
 
         if (buildModeActive && !preparation)
         {
@@ -361,6 +363,8 @@ public class BuildModeController : MonoBehaviour
 
         FacilityDefinition definition = facilities[index];
         if (definition == null || definition.Prefab == null)
+            return;
+        if (StoreProgression.Instance != null && !StoreProgression.Instance.IsFacilityUnlocked(definition))
             return;
 
         if (toolMode == BuildToolMode.Moving)
@@ -1811,6 +1815,8 @@ public class BuildModeController : MonoBehaviour
             ProductDefinition product = storeInventory.GetProductDefinition(index);
             if (product == null || product.StorageType != assignmentShelf.AcceptedStorageType)
                 continue;
+            if (StoreProgression.Instance != null && !StoreProgression.Instance.IsProductUnlocked(product))
+                continue;
 
             if (product == assignmentShelf.AssignedProduct)
                 selectedIndex = assignmentProducts.Count;
@@ -1825,6 +1831,26 @@ public class BuildModeController : MonoBehaviour
         productDropdown.AddOptions(options);
         productDropdown.SetValueWithoutNotify(selectedIndex);
         productDropdown.RefreshShownValue();
+    }
+
+    void ApplyFacilityButtonVisibility()
+    {
+        SetFacilityButtonVisible(shelfButton, 0);
+        SetFacilityButtonVisible(refrigeratorButton, 1);
+        SetFacilityButtonVisible(checkoutButton, 2);
+        SetFacilityButtonVisible(wallShelfButton, 3);
+    }
+
+    void SetFacilityButtonVisible(Button button, int index)
+    {
+        if (button == null)
+            return;
+
+        bool visible = true;
+        if (StoreProgression.Instance != null && facilities != null && index >= 0 && index < facilities.Length)
+            visible = StoreProgression.Instance.IsFacilityUnlocked(facilities[index]);
+        if (button.gameObject.activeSelf != visible)
+            button.gameObject.SetActive(visible);
     }
 
     void RefreshFacilityButtonLabels()

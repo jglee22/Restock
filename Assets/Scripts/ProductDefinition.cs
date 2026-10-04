@@ -32,6 +32,7 @@ public class ProductDefinition : ScriptableObject
     [Header("Store")]
     [SerializeField] int maxShelfCount = 1;
     [SerializeField, Range(0f, 1f)] float popularity;
+    [SerializeField] int unlockStage;
 
     [Header("Presentation")]
     [SerializeField] Sprite icon;
@@ -45,6 +46,7 @@ public class ProductDefinition : ScriptableObject
     public int BaseSellPrice => baseSellPrice;
     public int MaxShelfCount => maxShelfCount;
     public float Popularity => popularity;
+    public int UnlockStage => unlockStage;
     public Sprite Icon => icon;
     public GameObject ProductPrefab => productPrefab;
 
@@ -73,6 +75,11 @@ public class ProductDefinition : ScriptableObject
         if (popularity < 0f || popularity > 1f)
         {
             Debug.LogWarning($"ProductDefinition: Popularity는 0 이상 1 이하여야 합니다. 현재 값: {popularity}", this);
+        }
+
+        if (unlockStage < 0)
+        {
+            unlockStage = 0;
         }
     }
 }

@@ -19,3 +19,4 @@ MonoBehaviour:
   gridSize: {x: 2, y: 1}
   prefab: {fileID: 100000, guid: 8970907bd4624234ea87915c8aee191a, type: 3}
   requiresWall: 1
+  unlockStage: 3
