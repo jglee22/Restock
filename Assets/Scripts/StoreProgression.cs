@@ -282,11 +282,11 @@ public class StoreProgression : MonoBehaviour
         switch (stage)
         {
             case 0:
-                return "라면 상품군";
+                return "라면 상품군, 통로 진열 공간";
             case 1:
-                return "과자 상품군, 진열대";
+                return "과자 상품군, 북쪽 벽 진열 공간, 진열대";
             case 2:
-                return "벽 진열대, 냉장고, 업그레이드";
+                return "나머지 벽 진열 공간, 벽 진열대, 냉장고, 업그레이드";
             case 3:
                 return "계산대, 업그레이드 상한";
             default:

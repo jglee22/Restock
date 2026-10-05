@@ -241,8 +241,9 @@ public class BuildModeController : MonoBehaviour
     {
         bool preparation = IsPreparation();
         bool anyFacility = StoreProgression.Instance == null || StoreProgression.Instance.HasUnlockedFacility(facilities);
+        bool canAssignExpandedShelf = StoreProgression.Instance != null && StoreProgression.Instance.CompletedStage >= 1;
         if (buildButton != null)
-            buildButton.gameObject.SetActive(preparation && anyFacility);
+            buildButton.gameObject.SetActive(preparation && (anyFacility || canAssignExpandedShelf));
         ApplyFacilityButtonVisibility();
 
         if (buildModeActive && !preparation)
@@ -1862,15 +1863,30 @@ public class BuildModeController : MonoBehaviour
 
     void TrySelectProductTarget()
     {
-        if (!TryGetPlacedFacilityUnderPointer(out PlacedFacility placed))
-            return;
-        if (!TryGetShoppingShelf(placed, out Shelf shelf))
+        if (!TryGetAssignableShelfUnderPointer(out Shelf shelf))
             return;
 
         assignmentShelf = shelf;
         RefreshProductOptions();
         RefreshProductStatus();
         SetPresentedPanel(productAssignmentPanel, true);
+    }
+
+    bool TryGetAssignableShelfUnderPointer(out Shelf shelf)
+    {
+        shelf = null;
+        if (viewCamera == null || Mouse.current == null)
+            return false;
+
+        Ray ray = viewCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        if (!Physics.Raycast(ray, out RaycastHit hit, 1000f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return false;
+
+        if (preview != null && hit.transform.IsChildOf(preview.transform))
+            return false;
+
+        shelf = hit.collider.GetComponentInParent<Shelf>();
+        return shelf != null && shelf.gameObject.activeInHierarchy;
     }
 
     void ApplySelectedProduct()

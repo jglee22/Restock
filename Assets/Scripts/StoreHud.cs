@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using TMPro;
@@ -751,13 +752,32 @@ public class StoreHud : MonoBehaviour
         if (restockShelves == null)
         {
             WarnOnce("StoreHud: 진열할 Shelf가 연결되지 않았습니다.");
+        }
+
+        var restocked = new HashSet<Shelf>();
+        RestockShelves(restockShelves, restocked);
+        if (customerSpawner != null)
+        {
+            RestockShelves(customerSpawner.ShoppingShelves, restocked);
+        }
+    }
+
+    void RestockShelves(IReadOnlyList<Shelf> shelves, HashSet<Shelf> restocked)
+    {
+        if (shelves == null)
+        {
             return;
         }
 
-        for (int index = 0; index < restockShelves.Length; index++)
+        for (int index = 0; index < shelves.Count; index++)
         {
-            Shelf shelf = restockShelves[index];
-            if (shelf == null || shelf.AssignedProduct == null)
+            Shelf shelf = shelves[index];
+            if (shelf == null || !shelf.gameObject.activeInHierarchy || shelf.AssignedProduct == null)
+            {
+                continue;
+            }
+
+            if (!restocked.Add(shelf))
             {
                 continue;
             }
