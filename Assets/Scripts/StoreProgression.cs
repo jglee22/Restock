@@ -16,19 +16,18 @@ public class StoreProgression : MonoBehaviour
     [SerializeField] StoreEconomy economy;
     [SerializeField] int[] stageRevenueGoals = { 38000, 79000, 81000, 85000, 90000 };
 
-    const string StageOneRamenId = "ramen";
-    const string StageOneAisleShelfName = "AisleShelf_02";
-    const string StageOneWallShelfName = "WallShelf_NorthWest";
-    const int StageOneRamenNearCount = 6;
-    const int StageOneRamenAisleCount = 5;
-    const int StageOneRamenWallCount = 5;
-
-    struct MerchandiseSnapshot
-    {
-        public Shelf shelf;
-        public ProductDefinition product;
-        public int quantity;
-    }
+    const string StarterRamenId = "ramen";
+    const int StarterRamenCount = 16;
+    const string StarterShelfName = "ShelfPlaceholder";
+    const string WaterRefrigeratorName = "Refrigerator_Water";
+    const string ColaRefrigeratorName = "Refrigerator_Cola";
+    const string FirstAisleShelfName = "AisleShelf_02";
+    const string SecondAisleShelfName = "AisleShelf_02 (1)";
+    const string NorthWestWallShelfName = "WallShelf_NorthWest";
+    const string NorthWallShelfName = "WallShelfPlaceholder";
+    const string WestWallShelfName = "WallShelf_WestNorth";
+    const string EastWallShelfName = "WallShelf_East";
+    const string WestCenterWallShelfName = "WallShelfPlaceholder (1)";
 
     int completedStage;
     bool evaluated;
@@ -36,7 +35,6 @@ public class StoreProgression : MonoBehaviour
     bool hadGoal;
     int evaluatedGoal;
     int evaluatedRevenue;
-    MerchandiseSnapshot[] newGameMerchandise;
 
     public int CompletedStage => completedStage;
     public bool IsCampaignComplete => completedStage >= CampaignCompletedStage;
@@ -199,6 +197,7 @@ public class StoreProgression : MonoBehaviour
         evaluated = false;
         succeeded = false;
         hadGoal = false;
+        ApplyFacilityVisibility();
     }
 
     public bool TryRestoreCompletedStage(int stage)
@@ -213,6 +212,7 @@ public class StoreProgression : MonoBehaviour
         evaluated = false;
         succeeded = false;
         hadGoal = false;
+        ApplyFacilityVisibility();
         return true;
     }
 
@@ -306,7 +306,8 @@ public class StoreProgression : MonoBehaviour
             return;
         }
 
-        Shelf[] shelves = Object.FindObjectsByType<Shelf>(FindObjectsSortMode.None);
+        ApplyFacilityVisibility();
+        Shelf[] shelves = FindShelves();
         for (int index = 0; index < shelves.Length; index++)
         {
             Shelf shelf = shelves[index];
@@ -324,15 +325,12 @@ public class StoreProgression : MonoBehaviour
             shelf.ClearDisplay();
         }
 
-        DistributeStageOneRamen(shelves);
+        KeepStarterRamen(shelves);
     }
 
-    void DistributeStageOneRamen(Shelf[] shelves)
+    void ApplyFacilityVisibility()
     {
-        Shelf source = null;
-        Shelf aisle = null;
-        Shelf wall = null;
-        int ramenShelfCount = 0;
+        Shelf[] shelves = FindShelves();
         for (int index = 0; index < shelves.Length; index++)
         {
             Shelf shelf = shelves[index];
@@ -341,85 +339,73 @@ public class StoreProgression : MonoBehaviour
                 continue;
             }
 
+            int requiredStage = RequiredStageForShelf(shelf.name);
+            if (requiredStage < 0)
+            {
+                continue;
+            }
+
+            bool visible = completedStage >= requiredStage;
+            if (shelf.gameObject.activeSelf != visible)
+            {
+                shelf.gameObject.SetActive(visible);
+            }
+        }
+    }
+
+    static int RequiredStageForShelf(string shelfName)
+    {
+        switch (shelfName)
+        {
+            case WaterRefrigeratorName:
+            case ColaRefrigeratorName:
+            case StarterShelfName:
+                return 0;
+            case FirstAisleShelfName:
+            case SecondAisleShelfName:
+                return 1;
+            case NorthWestWallShelfName:
+            case NorthWallShelfName:
+                return 2;
+            case WestWallShelfName:
+            case EastWallShelfName:
+            case WestCenterWallShelfName:
+                return 3;
+            default:
+                return -1;
+        }
+    }
+
+    void KeepStarterRamen(Shelf[] shelves)
+    {
+        for (int index = 0; index < shelves.Length; index++)
+        {
+            Shelf shelf = shelves[index];
+            if (shelf == null || shelf.name != StarterShelfName)
+            {
+                continue;
+            }
+
             ProductDefinition product = shelf.AssignedProduct;
-            if (product != null && product.ProductId == StageOneRamenId && shelf.CurrentQuantity > 0)
+            if (product == null || product.ProductId != StarterRamenId)
             {
-                ramenShelfCount += 1;
-                source = shelf;
+                Debug.LogWarning("StoreProgression: 시작 진열대의 기본 라면을 유지하지 못했습니다.", shelf);
+                return;
             }
 
-            if (product != null || shelf.CurrentQuantity != 0 || shelf.AcceptedStorageType != ProductStorageType.Shelf)
+            if (!shelf.TryRestoreState(product, StarterRamenCount))
             {
-                continue;
+                Debug.LogWarning("StoreProgression: 시작 진열대의 기본 라면 수량을 맞추지 못했습니다.", shelf);
             }
 
-            if (shelf.name == StageOneAisleShelfName)
-            {
-                aisle = shelf;
-            }
-            else if (shelf.name == StageOneWallShelfName)
-            {
-                wall = shelf;
-            }
-        }
-
-        int distributedTotal = StageOneRamenNearCount + StageOneRamenAisleCount + StageOneRamenWallCount;
-        if (ramenShelfCount != 1 || source == null || aisle == null || wall == null || source.CurrentQuantity != distributedTotal)
-        {
-            Debug.LogWarning("StoreProgression: Stage 1 라면 분산 진열을 적용하지 못했습니다.", this);
             return;
         }
 
-        ProductDefinition ramen = source.AssignedProduct;
-        newGameMerchandise = new MerchandiseSnapshot[]
-        {
-            CaptureShelf(source),
-            CaptureShelf(aisle),
-            CaptureShelf(wall)
-        };
-
-        if (source.TryRestoreState(ramen, StageOneRamenNearCount)
-            && aisle.TryRestoreState(ramen, StageOneRamenAisleCount)
-            && wall.TryRestoreState(ramen, StageOneRamenWallCount))
-        {
-            return;
-        }
-
-        RevertNewGameMerchandise();
-        Debug.LogWarning("StoreProgression: Stage 1 라면 분산 진열 적용에 실패해 원래 진열로 되돌렸습니다.", this);
+        Debug.LogWarning("StoreProgression: 시작 진열대를 찾지 못했습니다.", this);
     }
 
-    static MerchandiseSnapshot CaptureShelf(Shelf shelf)
+    static Shelf[] FindShelves()
     {
-        return new MerchandiseSnapshot
-        {
-            shelf = shelf,
-            product = shelf.AssignedProduct,
-            quantity = shelf.CurrentQuantity
-        };
-    }
-
-    public void RevertNewGameMerchandise()
-    {
-        if (newGameMerchandise == null)
-        {
-            return;
-        }
-
-        for (int index = 0; index < newGameMerchandise.Length; index++)
-        {
-            MerchandiseSnapshot snapshot = newGameMerchandise[index];
-            if (snapshot.shelf == null)
-            {
-                continue;
-            }
-
-            if (!snapshot.shelf.TryRestoreState(snapshot.product, snapshot.quantity))
-            {
-                Debug.LogWarning("StoreProgression: 새 게임 진열 분산을 되돌리지 못했습니다.", snapshot.shelf);
-            }
-        }
-
-        newGameMerchandise = null;
+        return Object.FindObjectsByType<Shelf>(FindObjectsInactive.Include, FindObjectsSortMode.None);
     }
 }

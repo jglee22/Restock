@@ -523,6 +523,11 @@ public class CustomerMover : MonoBehaviour
         for (int index = 0; index < shoppingShelves.Length; index++)
         {
             Shelf shelf = shoppingShelves[index];
+            if (shelf != null && !shelf.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
             ProductDefinition product = shelf != null ? shelf.AssignedProduct : null;
             if (product == null || attemptedProducts.Contains(product) || recordedStockouts.Contains(product))
             {
@@ -534,7 +539,7 @@ public class CustomerMover : MonoBehaviour
             for (int otherIndex = 0; otherIndex < shoppingShelves.Length; otherIndex++)
             {
                 Shelf other = shoppingShelves[otherIndex];
-                if (other == null || other.AssignedProduct != product)
+                if (other == null || !other.gameObject.activeInHierarchy || other.AssignedProduct != product)
                 {
                     continue;
                 }
@@ -571,6 +576,7 @@ public class CustomerMover : MonoBehaviour
     bool CanShop(Shelf shelf, Shelf excludedShelf)
     {
         return shelf != null
+            && shelf.gameObject.activeInHierarchy
             && shelf != excludedShelf
             && shelf.AssignedProduct != null
             && !attemptedProducts.Contains(shelf.AssignedProduct)

@@ -597,8 +597,6 @@ public class StorePersistence : MonoBehaviour
             }
         }
 
-        progress.RevertNewGameMerchandise();
-
         for (int index = 0; index < shelves.Length; index++)
         {
             if (validated.shelfPresent == null || !validated.shelfPresent[index])
