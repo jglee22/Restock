@@ -16,12 +16,27 @@ public class StoreProgression : MonoBehaviour
     [SerializeField] StoreEconomy economy;
     [SerializeField] int[] stageRevenueGoals = { 38000, 79000, 81000, 85000, 90000 };
 
+    const string StageOneRamenId = "ramen";
+    const string StageOneAisleShelfName = "AisleShelf_02";
+    const string StageOneWallShelfName = "WallShelf_NorthWest";
+    const int StageOneRamenNearCount = 6;
+    const int StageOneRamenAisleCount = 5;
+    const int StageOneRamenWallCount = 5;
+
+    struct MerchandiseSnapshot
+    {
+        public Shelf shelf;
+        public ProductDefinition product;
+        public int quantity;
+    }
+
     int completedStage;
     bool evaluated;
     bool succeeded;
     bool hadGoal;
     int evaluatedGoal;
     int evaluatedRevenue;
+    MerchandiseSnapshot[] newGameMerchandise;
 
     public int CompletedStage => completedStage;
     public bool IsCampaignComplete => completedStage >= CampaignCompletedStage;
@@ -308,5 +323,103 @@ public class StoreProgression : MonoBehaviour
 
             shelf.ClearDisplay();
         }
+
+        DistributeStageOneRamen(shelves);
+    }
+
+    void DistributeStageOneRamen(Shelf[] shelves)
+    {
+        Shelf source = null;
+        Shelf aisle = null;
+        Shelf wall = null;
+        int ramenShelfCount = 0;
+        for (int index = 0; index < shelves.Length; index++)
+        {
+            Shelf shelf = shelves[index];
+            if (shelf == null)
+            {
+                continue;
+            }
+
+            ProductDefinition product = shelf.AssignedProduct;
+            if (product != null && product.ProductId == StageOneRamenId && shelf.CurrentQuantity > 0)
+            {
+                ramenShelfCount += 1;
+                source = shelf;
+            }
+
+            if (product != null || shelf.CurrentQuantity != 0 || shelf.AcceptedStorageType != ProductStorageType.Shelf)
+            {
+                continue;
+            }
+
+            if (shelf.name == StageOneAisleShelfName)
+            {
+                aisle = shelf;
+            }
+            else if (shelf.name == StageOneWallShelfName)
+            {
+                wall = shelf;
+            }
+        }
+
+        int distributedTotal = StageOneRamenNearCount + StageOneRamenAisleCount + StageOneRamenWallCount;
+        if (ramenShelfCount != 1 || source == null || aisle == null || wall == null || source.CurrentQuantity != distributedTotal)
+        {
+            Debug.LogWarning("StoreProgression: Stage 1 라면 분산 진열을 적용하지 못했습니다.", this);
+            return;
+        }
+
+        ProductDefinition ramen = source.AssignedProduct;
+        newGameMerchandise = new MerchandiseSnapshot[]
+        {
+            CaptureShelf(source),
+            CaptureShelf(aisle),
+            CaptureShelf(wall)
+        };
+
+        if (source.TryRestoreState(ramen, StageOneRamenNearCount)
+            && aisle.TryRestoreState(ramen, StageOneRamenAisleCount)
+            && wall.TryRestoreState(ramen, StageOneRamenWallCount))
+        {
+            return;
+        }
+
+        RevertNewGameMerchandise();
+        Debug.LogWarning("StoreProgression: Stage 1 라면 분산 진열 적용에 실패해 원래 진열로 되돌렸습니다.", this);
+    }
+
+    static MerchandiseSnapshot CaptureShelf(Shelf shelf)
+    {
+        return new MerchandiseSnapshot
+        {
+            shelf = shelf,
+            product = shelf.AssignedProduct,
+            quantity = shelf.CurrentQuantity
+        };
+    }
+
+    public void RevertNewGameMerchandise()
+    {
+        if (newGameMerchandise == null)
+        {
+            return;
+        }
+
+        for (int index = 0; index < newGameMerchandise.Length; index++)
+        {
+            MerchandiseSnapshot snapshot = newGameMerchandise[index];
+            if (snapshot.shelf == null)
+            {
+                continue;
+            }
+
+            if (!snapshot.shelf.TryRestoreState(snapshot.product, snapshot.quantity))
+            {
+                Debug.LogWarning("StoreProgression: 새 게임 진열 분산을 되돌리지 못했습니다.", snapshot.shelf);
+            }
+        }
+
+        newGameMerchandise = null;
     }
 }

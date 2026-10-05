@@ -259,9 +259,7 @@ public class CustomerSpawner : MonoBehaviour
             return;
         }
 
-        UnityEngine.AI.NavMeshAgent prefabAgent = customerPrefab.GetComponent<UnityEngine.AI.NavMeshAgent>();
-        float baseOffset = prefabAgent != null ? prefabAgent.baseOffset : 0f;
-        Vector3 pivot = spawnPoint.position + Vector3.up * baseOffset;
+        Vector3 pivot = spawnPoint.position;
         CustomerMover customer = Instantiate(customerPrefab, pivot, spawnPoint.rotation);
         UnityEngine.AI.NavMeshAgent agent = customer.GetComponent<UnityEngine.AI.NavMeshAgent>();
         if (agent == null || !agent.Warp(pivot))
