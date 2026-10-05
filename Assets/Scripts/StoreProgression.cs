@@ -330,6 +330,7 @@ public class StoreProgression : MonoBehaviour
 
     void ApplyFacilityVisibility()
     {
+        bool visibilityChanged = false;
         Shelf[] shelves = FindShelves();
         for (int index = 0; index < shelves.Length; index++)
         {
@@ -349,8 +350,24 @@ public class StoreProgression : MonoBehaviour
             if (shelf.gameObject.activeSelf != visible)
             {
                 shelf.gameObject.SetActive(visible);
+                visibilityChanged = true;
             }
         }
+
+        if (visibilityChanged)
+            RequestLayoutNavMeshRefresh();
+    }
+
+    void RequestLayoutNavMeshRefresh()
+    {
+        BuildModeController[] builders = Object.FindObjectsByType<BuildModeController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        if (builders == null || builders.Length == 0 || builders[0] == null)
+        {
+            Debug.LogWarning("StoreProgression: BuildModeController가 없어 NavMesh를 갱신하지 못했습니다.", this);
+            return;
+        }
+
+        builders[0].RequestLayoutNavMeshRefresh();
     }
 
     static int RequiredStageForShelf(string shelfName)

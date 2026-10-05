@@ -69,6 +69,7 @@ public class BuildModeController : MonoBehaviour
     readonly Collider[] overlapHits = new Collider[32];
     readonly List<RaycastResult> uiHits = new List<RaycastResult>();
     readonly HashSet<Vector2Int> occupiedCells = new HashSet<Vector2Int>();
+    readonly HashSet<Vector2Int> staticLayoutCells = new HashSet<Vector2Int>();
     MaterialPropertyBlock tintBlock;
 
     Transform placedRoot;
@@ -142,6 +143,7 @@ public class BuildModeController : MonoBehaviour
         tintBlock = new MaterialPropertyBlock();
         placedRoot = new GameObject("PlacedFacilities").transform;
         CacheGrid();
+        ReserveStaticLayout();
         EnsureWalkableQuery();
         if (buildPanel != null)
             buildPanel.SetActive(false);
@@ -513,6 +515,12 @@ public class BuildModeController : MonoBehaviour
             if (!TryReserveFootprint(occupied, origin, footprint, definition.FacilityId, out error))
                 return false;
 
+            if (OverlapsStaticLayout(origin, footprint))
+            {
+                error = $"{definition.FacilityId} ({origin.x}, {origin.y})는 매장에 고정된 시설 자리입니다.";
+                return false;
+            }
+
             Vector3 center = FootprintCenter(origin, footprint);
             if (OverlapsStaticCollider(center, footprint))
             {
@@ -690,6 +698,11 @@ public class BuildModeController : MonoBehaviour
         }
 
         customerSpawner.UnregisterCheckout(counter);
+    }
+
+    public void RequestLayoutNavMeshRefresh()
+    {
+        RequestNavMeshRefresh();
     }
 
     void RequestNavMeshRefresh()
@@ -1054,13 +1067,119 @@ public class BuildModeController : MonoBehaviour
             && origin.y + size.y <= gridDepth;
     }
 
+    void ReserveStaticLayout()
+    {
+        staticLayoutCells.Clear();
+        if (!hasGrid)
+            return;
+
+        Shelf[] shelves = Object.FindObjectsByType<Shelf>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int index = 0; index < shelves.Length; index++)
+        {
+            Shelf shelf = shelves[index];
+            if (shelf == null || shelf.GetComponent<PlacedFacility>() != null)
+                continue;
+
+            if (!TryGetStaticFacilityDefinition(shelf, out FacilityDefinition definition))
+            {
+                Debug.LogWarning($"BuildModeController: {shelf.name}의 고정 시설 크기를 찾지 못해 건설 예약에서 빠졌습니다.", shelf);
+                continue;
+            }
+
+            ReserveStaticFootprint(shelf.transform, definition);
+        }
+
+        CheckoutCounter[] checkouts = Object.FindObjectsByType<CheckoutCounter>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        FacilityDefinition checkoutDefinition = FindFacilityDefinition(FacilityType.Checkout, false);
+        for (int index = 0; index < checkouts.Length; index++)
+        {
+            CheckoutCounter checkout = checkouts[index];
+            if (checkout == null || checkout.GetComponent<PlacedFacility>() != null)
+                continue;
+
+            if (checkoutDefinition == null)
+            {
+                Debug.LogWarning($"BuildModeController: {checkout.name}의 계산대 크기를 찾지 못해 건설 예약에서 빠졌습니다.", checkout);
+                continue;
+            }
+
+            ReserveStaticFootprint(checkout.transform, checkoutDefinition);
+        }
+    }
+
+    bool TryGetStaticFacilityDefinition(Shelf shelf, out FacilityDefinition definition)
+    {
+        definition = null;
+        if (shelf.AcceptedStorageType == ProductStorageType.Refrigerated)
+        {
+            definition = FindFacilityDefinition(FacilityType.Refrigerator, false);
+            return definition != null;
+        }
+
+        bool requiresWall = shelf.CustomerStandPointBack == null;
+        definition = FindFacilityDefinition(FacilityType.Shelf, requiresWall);
+        return definition != null;
+    }
+
+    FacilityDefinition FindFacilityDefinition(FacilityType facilityType, bool requiresWall)
+    {
+        if (facilities == null)
+            return null;
+
+        for (int index = 0; index < facilities.Length; index++)
+        {
+            FacilityDefinition candidate = facilities[index];
+            if (candidate == null || candidate.FacilityType != facilityType)
+                continue;
+            if (facilityType == FacilityType.Shelf && candidate.RequiresWall != requiresWall)
+                continue;
+
+            return candidate;
+        }
+
+        return null;
+    }
+
+    void ReserveStaticFootprint(Transform target, FacilityDefinition definition)
+    {
+        int quarterTurns = PlacedFacility.NormalizeQuarterTurns(Mathf.RoundToInt(target.eulerAngles.y / 90f));
+        Vector2Int footprint = RotatedGridSize(definition.GridSize, quarterTurns);
+        Vector2Int origin = OriginFor(target.position, footprint);
+        if (!IsInsideFloor(origin, footprint))
+        {
+            Debug.LogWarning($"BuildModeController: {target.name}의 고정 자리가 바닥 격자 밖에 있습니다.", target);
+            return;
+        }
+
+        for (int x = 0; x < footprint.x; x++)
+        {
+            for (int y = 0; y < footprint.y; y++)
+                staticLayoutCells.Add(new Vector2Int(origin.x + x, origin.y + y));
+        }
+    }
+
+    bool OverlapsStaticLayout(Vector2Int origin, Vector2Int size)
+    {
+        for (int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                if (staticLayoutCells.Contains(new Vector2Int(origin.x + x, origin.y + y)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
     bool OverlapsBlockedCell(Vector2Int origin, Vector2Int size)
     {
         for (int x = 0; x < size.x; x++)
         {
             for (int y = 0; y < size.y; y++)
             {
-                if (occupiedCells.Contains(new Vector2Int(origin.x + x, origin.y + y)))
+                Vector2Int cell = new Vector2Int(origin.x + x, origin.y + y);
+                if (occupiedCells.Contains(cell) || staticLayoutCells.Contains(cell))
                     return true;
             }
         }
