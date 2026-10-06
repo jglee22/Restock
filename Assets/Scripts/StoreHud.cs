@@ -386,21 +386,29 @@ public class StoreHud : MonoBehaviour
         displayedStockoutCount = stockoutCount;
         int averageTransaction = AverageTransactionValue(displayedRevenue, purchasingCustomers);
         float averageCheckoutWait = statistics != null ? statistics.AverageCheckoutWaitSeconds : 0f;
+        if (resultText != null)
+        {
+            resultText.richText = true;
+            resultText.textWrappingMode = TextWrappingModes.Normal;
+            resultText.overflowMode = TextOverflowModes.Overflow;
+        }
+
         var builder = new StringBuilder();
-        builder.Append(session.Day.ToString(CultureInfo.InvariantCulture)).Append("일차 종료\n\n");
-        builder.Append("[오늘의 매출]\n");
-        builder.Append("매출 ").Append(FormatWon(displayedRevenue)).Append('\n');
-        builder.Append("지출 ").Append(FormatWon(displayedExpense)).Append('\n');
-        builder.Append("순이익 ").Append(FormatSignedWon(economy.NetProfit)).Append("\n\n");
-        builder.Append("[고객]\n");
-        builder.Append("방문 고객 ").Append(visitors.ToString(CultureInfo.InvariantCulture)).Append("명\n");
-        builder.Append("구매 고객 ").Append(purchasingCustomers.ToString(CultureInfo.InvariantCulture)).Append("명\n");
-        builder.Append("구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append('\n');
-        builder.Append("평균 결제 금액 ").Append(FormatWon(averageTransaction)).Append('\n');
-        builder.Append("평균 대기 시간 ").Append(FormatCheckoutWait(averageCheckoutWait)).Append("\n\n");
-        builder.Append("[판매]\n");
-        builder.Append("판매 수량 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture)).Append("개\n");
-        builder.Append("품절 횟수 ").Append(stockoutCount.ToString(CultureInfo.InvariantCulture)).Append("회");
+        builder.Append("<size=18><color=#C8C3B8>");
+        builder.Append(session.Day.ToString(CultureInfo.InvariantCulture));
+        builder.Append("일차 종료</color></size>\n\n");
+        if (Progression != null)
+        {
+            Progression.AppendResult(builder);
+        }
+
+        builder.Append("\n\n<size=20><color=#C8C3B8>판매 통계</color></size>");
+        builder.Append("\n<size=20>매출 ").Append(FormatWon(displayedRevenue));
+        builder.Append(" · 지출 ").Append(FormatWon(displayedExpense));
+        builder.Append(" · 순이익 ").Append(FormatSignedWon(economy.NetProfit)).Append("</size>");
+        builder.Append("\n<size=20>판매 수량 ").Append(itemsSold.ToString(CultureInfo.InvariantCulture));
+        builder.Append("개 · 품절 ").Append(stockoutCount.ToString(CultureInfo.InvariantCulture)).Append("회</size>");
+        int shownProducts = 0;
         if (statistics != null)
         {
             for (int index = 0; index < statistics.TrackedProductCount; index++)
@@ -410,27 +418,43 @@ public class StoreHud : MonoBehaviour
                     continue;
                 }
 
-                if (soldQuantity == 0 && Progression != null && !Progression.IsProductUnlocked(product))
+                if (soldQuantity == 0)
                 {
                     continue;
                 }
 
                 string productName = string.IsNullOrEmpty(product.DisplayName) ? product.name : product.DisplayName;
-                builder.Append('\n');
+                builder.Append("\n<size=20>");
                 builder.Append(productName).Append(' ');
                 builder.Append(soldQuantity.ToString(CultureInfo.InvariantCulture)).Append("개 / ");
                 builder.Append(FormatWon(revenue));
+                builder.Append("</size>");
+                shownProducts++;
             }
         }
 
-        builder.Append("\n\n[이벤트]\n");
-        builder.Append(eventSystem != null ? eventSystem.ResultLabel : "오늘의 이벤트: 없음");
-        if (Progression != null)
+        if (shownProducts == 0)
         {
-            Progression.AppendResult(builder);
+            builder.Append("\n<size=20>판매 상품 없음</size>");
         }
 
+        builder.Append("\n\n<size=20><color=#C8C3B8>고객</color></size>");
+        builder.Append("\n<size=20>방문 고객 ").Append(visitors.ToString(CultureInfo.InvariantCulture)).Append("명</size>");
+        builder.Append("\n<size=20>구매 고객 ").Append(purchasingCustomers.ToString(CultureInfo.InvariantCulture)).Append("명</size>");
+        builder.Append("\n<size=20>구매 전환율 ").Append(FormatConversionRate(purchasingCustomers, visitors)).Append("</size>");
+        builder.Append("\n<size=20>평균 결제 금액 ").Append(FormatWon(averageTransaction)).Append("</size>");
+        builder.Append("\n<size=20>평균 대기 시간 ").Append(FormatCheckoutWait(averageCheckoutWait)).Append("</size>");
+        builder.Append("\n\n<size=20><color=#C8C3B8>이벤트</color></size>");
+        builder.Append("\n<size=20>");
+        builder.Append(eventSystem != null ? eventSystem.ResultLabel : "오늘의 이벤트: 없음");
+        builder.Append("</size>");
         SetText(resultText, builder.ToString());
+        Canvas.ForceUpdateCanvases();
+        ScrollRect resultScroll = resultText.GetComponentInParent<ScrollRect>();
+        if (resultScroll != null)
+        {
+            resultScroll.verticalNormalizedPosition = 1f;
+        }
     }
 
     StoreProgression Progression => progression != null ? progression : StoreProgression.Instance;

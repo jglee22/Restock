@@ -16,6 +16,9 @@ public class StoreProgression : MonoBehaviour
     [SerializeField] StoreEconomy economy;
     [SerializeField] int[] stageRevenueGoals = { 38000, 79000, 81000, 85000, 90000 };
 
+    const string ResultMutedColor = "#C8C3B8";
+    const string ResultSuccessColor = "#A9D3B8";
+    const string ResultFailureColor = "#F0B59A";
     const string StarterRamenId = "ramen";
     const int StarterRamenCount = 16;
     const string StarterShelfName = "ShelfPlaceholder";
@@ -238,43 +241,90 @@ public class StoreProgression : MonoBehaviour
             EvaluateDay();
         }
 
-        builder.Append("\n\n[목표]\n");
         if (IsCampaignComplete)
         {
-            builder.Append("캠페인 완료\n");
-            builder.Append("모든 콘텐츠가 열려 있습니다.");
+            AppendHeadline(builder, "캠페인 완료", true);
+            AppendBodyLine(builder, "모든 콘텐츠가 열려 있습니다.");
             return;
         }
 
         if (!hadGoal)
         {
-            builder.Append("오늘 매출 ").Append(FormatWon(evaluatedRevenue));
+            AppendSectionLabel(builder, "오늘 매출");
+            AppendAmountLine(builder, FormatWon(evaluatedRevenue));
             return;
         }
 
-        builder.Append("오늘 목표 ").Append(FormatWon(evaluatedGoal)).Append('\n');
-        builder.Append("오늘 매출 ").Append(FormatWon(evaluatedRevenue)).Append('\n');
         if (!succeeded)
         {
-            builder.Append("목표 미달\n");
-            builder.Append("다음 날 다시 도전");
+            AppendHeadline(builder, "목표 미달", false);
+            AppendSectionLabel(builder, "오늘 매출");
+            AppendRevenueComparison(builder, evaluatedRevenue, evaluatedGoal);
+            AppendBodyLine(builder, "다음 날 다시 도전");
             return;
         }
 
         if (completedStage + 1 >= CampaignCompletedStage)
         {
-            builder.Append("캠페인 완료\n");
-            builder.Append("모든 콘텐츠 해금 완료");
+            AppendHeadline(builder, "캠페인 완료", true);
+            AppendBodyLine(builder, "모든 콘텐츠 해금 완료");
             return;
         }
 
-        builder.Append("목표 달성\n");
-        builder.Append("신규 해금 ").Append(RewardText(completedStage)).Append('\n');
+        AppendHeadline(builder, "목표 달성", true);
+        AppendSectionLabel(builder, "오늘 매출");
+        AppendRevenueComparison(builder, evaluatedRevenue, evaluatedGoal);
+        AppendSectionLabel(builder, "신규 해금");
+        AppendBodyLine(builder, RewardText(completedStage));
         int nextIndex = completedStage + 1;
         if (stageRevenueGoals != null && nextIndex < stageRevenueGoals.Length && stageRevenueGoals[nextIndex] > 0)
         {
-            builder.Append("다음 목표 ").Append(FormatWon(stageRevenueGoals[nextIndex]));
+            AppendSectionLabel(builder, "다음 목표");
+            AppendAmountLine(builder, FormatWon(stageRevenueGoals[nextIndex]));
         }
+    }
+
+    static void AppendHeadline(StringBuilder builder, string text, bool success)
+    {
+        builder.Append("<size=40><color=");
+        builder.Append(success ? ResultSuccessColor : ResultFailureColor);
+        builder.Append('>');
+        builder.Append(text);
+        builder.Append("</color></size>");
+    }
+
+    static void AppendSectionLabel(StringBuilder builder, string text)
+    {
+        builder.Append("\n<size=20><color=");
+        builder.Append(ResultMutedColor);
+        builder.Append('>');
+        builder.Append(text);
+        builder.Append("</color></size>");
+    }
+
+    static void AppendAmountLine(StringBuilder builder, string text)
+    {
+        builder.Append("\n<size=32>");
+        builder.Append(text);
+        builder.Append("</size>");
+    }
+
+    static void AppendRevenueComparison(StringBuilder builder, int revenue, int goal)
+    {
+        builder.Append("\n<size=32>");
+        builder.Append(FormatWon(revenue));
+        builder.Append("</size><size=24><color=");
+        builder.Append(ResultMutedColor);
+        builder.Append("> / ");
+        builder.Append(FormatWon(goal));
+        builder.Append("</color></size>");
+    }
+
+    static void AppendBodyLine(StringBuilder builder, string text)
+    {
+        builder.Append("\n<size=26>");
+        builder.Append(text);
+        builder.Append("</size>");
     }
 
     static string RewardText(int stage)

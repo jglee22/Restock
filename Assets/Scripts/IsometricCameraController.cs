@@ -1,5 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 // InputSystem_Actions에는 카메라 이동/줌 액션이 없다.
 // 기존 액션 에셋은 바꾸지 않고, 이미 활성화된 Input System의 키보드와 마우스를 읽는다.
@@ -17,6 +20,7 @@ public class IsometricCameraController : MonoBehaviour
     [SerializeField] float maxWorldZ = 16f;
 
     Camera targetCamera;
+    static readonly List<RaycastResult> scrollHits = new List<RaycastResult>();
 
     void Awake()
     {
@@ -113,8 +117,36 @@ public class IsometricCameraController : MonoBehaviour
         // 이미 1 단위로 들어오는 환경도 있어, 큰 값만 120으로 나눈다.
         // zoomSpeed는 휠 한 칸당 Orthographic Size 변화량이다.
         float notches = Mathf.Abs(scroll) > 10f ? scroll / ScrollPixelsPerNotch : scroll;
+        if (PointerOverScrollRect())
+        {
+            return;
+        }
+
         float lower = Mathf.Min(minOrthographicSize, maxOrthographicSize);
         float upper = Mathf.Max(minOrthographicSize, maxOrthographicSize);
         targetCamera.orthographicSize = Mathf.Clamp(targetCamera.orthographicSize - notches * zoomSpeed, lower, upper);
+    }
+
+    static bool PointerOverScrollRect()
+    {
+        if (EventSystem.current == null || Mouse.current == null)
+        {
+            return false;
+        }
+
+        scrollHits.Clear();
+        var eventData = new PointerEventData(EventSystem.current);
+        eventData.position = Mouse.current.position.ReadValue();
+        EventSystem.current.RaycastAll(eventData, scrollHits);
+        for (int index = 0; index < scrollHits.Count; index++)
+        {
+            if (scrollHits[index].gameObject != null
+                && scrollHits[index].gameObject.GetComponentInParent<ScrollRect>() != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
