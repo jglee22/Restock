@@ -47,6 +47,10 @@ public static class RestockPortfolioCapture
     static Vector2 targetScreen;
     static List<Vector3> placeCells;
     static int placeIndex;
+    static Vector3 placePoint;
+    static int shelvesBefore;
+    static float bestPlaceScore;
+    static bool foundPlace;
     static RecorderController controller;
     static VideoPlayer probe;
     static string probePath;
@@ -225,6 +229,7 @@ public static class RestockPortfolioCapture
             var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
             session.StartBusiness();
             session.SetSpeed(StoreSession.DoubleTimeScale);
+            LogHud("hero");
             Log("hero open customers " + CustomerCount());
             EnterStep(1);
             return;
@@ -232,7 +237,7 @@ public static class RestockPortfolioCapture
 
         if (step == 1)
         {
-            if (CustomerCount() >= 2 || ElapsedRealtime() > 25d)
+            if (CustomerCount() >= 3 || ElapsedRealtime() > 25d)
             {
                 Log("hero customers " + CustomerCount() + " revenue " + Revenue());
                 EnterStep(2);
@@ -243,7 +248,7 @@ public static class RestockPortfolioCapture
 
         if (step == 2)
         {
-            if (!StartMovie("01_HeroStore"))
+            if (!StartMovie("01_HeroStore_R2"))
             {
                 Fail();
                 return;
@@ -259,7 +264,7 @@ public static class RestockPortfolioCapture
             if (ElapsedFrames() >= 9 * 60)
             {
                 StopMovie();
-                BeginProbe("01_HeroStore");
+                BeginProbe("01_HeroStore_R2");
                 EnterStep(4);
             }
 
@@ -424,32 +429,40 @@ public static class RestockPortfolioCapture
             BeginCut();
             PrepareView();
             EnsureDevices();
-            var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
-            session.StartBusiness();
-            session.SetSpeed(StoreSession.NormalTimeScale);
+            FrameStarterStore();
+            LogHud("customer");
             EnterStep(1);
             return;
         }
 
         if (step == 1)
         {
-            if (CustomerCount() >= 1 || ElapsedRealtime() > 20d)
+            var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
+            session.StartBusiness();
+            session.SetSpeed(StoreSession.NormalTimeScale);
+            EnterStep(2);
+            return;
+        }
+
+        if (step == 2)
+        {
+            if (CustomerCount() >= 3 || ElapsedRealtime() > 22d)
             {
                 revenueAtStart = Revenue();
                 saleFrame = -1;
-                if (!StartMovie("04_CustomerLoop"))
+                if (!StartMovie("04_CustomerLoop_R2"))
                 {
                     Fail();
                     return;
                 }
 
-                EnterStep(2);
+                EnterStep(3);
             }
 
             return;
         }
 
-        if (step == 2)
+        if (step == 3)
         {
             RepaintGame();
             int revenue = Revenue();
@@ -459,13 +472,15 @@ public static class RestockPortfolioCapture
                 Log("sale revenue " + revenue);
             }
 
-            bool sold = saleFrame >= 0 && Time.frameCount - saleFrame >= 180;
-            if (sold || ElapsedFrames() >= 40 * 60)
+            bool sold = saleFrame >= 0 && Time.frameCount - saleFrame >= 150;
+            bool longEnough = ElapsedFrames() >= 10 * 60;
+            bool tooLong = ElapsedFrames() >= 12 * 60;
+            if ((sold && longEnough) || tooLong)
             {
                 Log("customer end revenue " + revenue + " customers " + CustomerCount());
                 StopMovie();
-                BeginProbe("04_CustomerLoop");
-                EnterStep(3);
+                BeginProbe("04_CustomerLoop_R2");
+                EnterStep(4);
             }
 
             return;
@@ -608,6 +623,7 @@ public static class RestockPortfolioCapture
             PrepareView();
             EnsureDevices();
             StockStore(2, 400000, false);
+            LogHud("assign");
             var chips = FindProduct("chips_original");
             var ordering = FindInactive<StoreOrdering>();
             bool ordered = chips != null && ordering != null && ordering.TryOrder(chips, 16);
@@ -623,7 +639,7 @@ public static class RestockPortfolioCapture
                 return;
             }
 
-            if (!StartMovie("07_AssignRestock"))
+            if (!StartMovie("07_AssignRestock_R2"))
             {
                 Fail();
                 return;
@@ -962,7 +978,7 @@ public static class RestockPortfolioCapture
         if (step == 13)
         {
             RepaintGame();
-            if (ElapsedFrames() < 80)
+            if (ElapsedFrames() < 110)
             {
                 return;
             }
@@ -984,7 +1000,7 @@ public static class RestockPortfolioCapture
             if (ElapsedFrames() >= 90)
             {
                 StopMovie();
-                BeginProbe("07_AssignRestock");
+                BeginProbe("07_AssignRestock_R2");
                 EnterStep(15);
             }
 
@@ -1009,6 +1025,7 @@ public static class RestockPortfolioCapture
             var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
             session.StartBusiness();
             session.SetSpeed(StoreSession.DoubleTimeScale);
+            LogHud("expanded");
             EnterStep(1);
             return;
         }
@@ -1017,7 +1034,7 @@ public static class RestockPortfolioCapture
         {
             if (CustomerCount() >= 2 || ElapsedRealtime() > 25d)
             {
-                if (!StartMovie("08_ExpandedStore"))
+                if (!StartMovie("08_ExpandedStore_R2"))
                 {
                     Fail();
                     return;
@@ -1035,7 +1052,7 @@ public static class RestockPortfolioCapture
             if (ElapsedFrames() >= 9 * 60)
             {
                 StopMovie();
-                BeginProbe("08_ExpandedStore");
+                BeginProbe("08_ExpandedStore_R2");
                 EnterStep(3);
             }
 
@@ -1059,20 +1076,28 @@ public static class RestockPortfolioCapture
             progression.TryRestoreCompletedStage(3);
             var economy = UnityEngine.Object.FindAnyObjectByType<StoreEconomy>();
             economy.TryRestoreState(250000, 0, 0);
+            AlignDay(3);
+            shelvesBefore = ActiveShelfCount();
+            placeCells = null;
+            placeIndex = 0;
+            foundPlace = false;
+            bestPlaceScore = float.MaxValue;
+            LogHud("build");
             EnterStep(1);
             return;
         }
 
         if (step == 1)
         {
-            if (ElapsedRealtime() < 0.5d)
+            if (ElapsedRealtime() < 0.4d)
             {
                 return;
             }
 
-            if (!StartMovie("09_BuildUpgrade"))
+            var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
+            if (!PanelActive(build, "buildPanel"))
             {
-                Fail();
+                ClickButton(build, "buildButton");
                 return;
             }
 
@@ -1082,14 +1107,13 @@ public static class RestockPortfolioCapture
 
         if (step == 2)
         {
-            RepaintGame();
-            if (ElapsedFrames() < 50)
+            if (ElapsedFrames() < 15)
             {
                 return;
             }
 
             var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
-            if (ClickButton(build, "buildButton"))
+            if (ClickButton(build, "shelfButton"))
             {
                 EnterStep(3);
             }
@@ -1099,54 +1123,62 @@ public static class RestockPortfolioCapture
 
         if (step == 3)
         {
-            RepaintGame();
-            if (ElapsedFrames() < 30)
-            {
-                return;
-            }
-
-            var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
-            if (ClickButton(build, "shelfButton"))
-            {
-                EnterStep(4);
-            }
-
-            return;
-        }
-
-        if (step == 4)
-        {
-            RepaintGame();
             if (placeCells == null)
             {
                 placeCells = CollectPlaceCells();
                 placeIndex = 0;
+                foundPlace = false;
+                bestPlaceScore = float.MaxValue;
                 markerFrame = Time.frameCount;
                 Log("place cells " + placeCells.Count);
             }
 
             if (placeIndex >= placeCells.Count)
             {
-                Log("no valid cell");
-                EnterStep(6);
+                Log(foundPlace ? "chosen cell score " + bestPlaceScore : "no valid cell");
+                EnterStep(4);
                 return;
             }
 
-            SetMouse(ScreenOfWorld(placeCells[placeIndex]), false);
+            Vector3 world = placeCells[placeIndex];
+            SetMouse(ScreenOfWorld(world), false);
             if (ElapsedFrames() < 6)
             {
                 return;
             }
 
-            if (!PreviewIsValid())
+            if (PreviewIsValid())
             {
-                placeIndex++;
-                markerFrame = Time.frameCount;
+                Vector2 screen = ScreenOfWorld(world);
+                float dx = screen.x - 820f;
+                float dy = screen.y - 540f;
+                float score = (dx * dx) + (dy * dy);
+                if (!foundPlace || score < bestPlaceScore)
+                {
+                    foundPlace = true;
+                    bestPlaceScore = score;
+                    placePoint = world;
+                    Log("candidate " + placeIndex + " " + screen);
+                }
+            }
+
+            placeIndex++;
+            markerFrame = Time.frameCount;
+            return;
+        }
+
+        if (step == 4)
+        {
+            var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
+            if (PanelActive(build, "buildPanel") && ElapsedFrames() < 40)
+            {
+                ClickButton(build, "exitButton");
                 return;
             }
 
-            if (ElapsedFrames() < 36)
+            if (!StartMovie("09_BuildUpgrade_R2"))
             {
+                Fail();
                 return;
             }
 
@@ -1157,15 +1189,14 @@ public static class RestockPortfolioCapture
         if (step == 5)
         {
             RepaintGame();
-            if (placeCells == null || placeIndex >= placeCells.Count)
+            if (ElapsedFrames() < 50)
             {
-                EnterStep(6);
                 return;
             }
 
-            if (ClickAt(ScreenOfWorld(placeCells[placeIndex])))
+            var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
+            if (ClickButton(build, "buildButton"))
             {
-                Log("place click money " + Money());
                 EnterStep(6);
             }
 
@@ -1175,12 +1206,13 @@ public static class RestockPortfolioCapture
         if (step == 6)
         {
             RepaintGame();
-            if (ElapsedFrames() < 40)
+            if (ElapsedFrames() < 25)
             {
                 return;
             }
 
-            if (ClickButton(Hud(), "upgradeButton"))
+            var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
+            if (ClickButton(build, "shelfButton"))
             {
                 EnterStep(7);
             }
@@ -1191,7 +1223,84 @@ public static class RestockPortfolioCapture
         if (step == 7)
         {
             RepaintGame();
-            if (ElapsedFrames() < 30)
+            SetMouse(ScreenOfWorld(placePoint), false);
+            if (ElapsedFrames() < 8)
+            {
+                return;
+            }
+
+            if (!PreviewIsValid())
+            {
+                if (ElapsedFrames() > 45)
+                {
+                    Log("preview lost");
+                    EnterStep(9);
+                }
+
+                return;
+            }
+
+            if (ElapsedFrames() < 110)
+            {
+                return;
+            }
+
+            EnterStep(8);
+            return;
+        }
+
+        if (step == 8)
+        {
+            RepaintGame();
+            if (ClickAt(ScreenOfWorld(placePoint)))
+            {
+                Log("place click money " + Money());
+                EnterStep(9);
+            }
+
+            return;
+        }
+
+        if (step == 9)
+        {
+            RepaintGame();
+            var build = UnityEngine.Object.FindAnyObjectByType<BuildModeController>();
+            if (!acted)
+            {
+                if (ElapsedFrames() < 10)
+                {
+                    return;
+                }
+
+                if (PanelActive(build, "buildPanel"))
+                {
+                    ClickButton(build, "exitButton");
+                    return;
+                }
+
+                acted = true;
+                markerFrame = Time.frameCount;
+                Log("build clear money " + Money() + " shelves " + ActiveShelfCount() + " was " + shelvesBefore);
+                return;
+            }
+
+            if (ElapsedFrames() < 130)
+            {
+                return;
+            }
+
+            if (ClickButton(Hud(), "upgradeButton"))
+            {
+                EnterStep(10);
+            }
+
+            return;
+        }
+
+        if (step == 10)
+        {
+            RepaintGame();
+            if (ElapsedFrames() < 45)
             {
                 return;
             }
@@ -1199,25 +1308,25 @@ public static class RestockPortfolioCapture
             if (ClickExactLabel("구매"))
             {
                 Log("upgrade clicked money " + Money());
-                EnterStep(8);
+                EnterStep(11);
             }
             else if (ElapsedFrames() > 90)
             {
                 Log("upgrade button missing");
-                EnterStep(8);
+                EnterStep(11);
             }
 
             return;
         }
 
-        if (step == 8)
+        if (step == 11)
         {
             RepaintGame();
-            if (ElapsedFrames() >= 220)
+            if (ElapsedFrames() >= 140)
             {
                 StopMovie();
-                BeginProbe("09_BuildUpgrade");
-                EnterStep(9);
+                BeginProbe("09_BuildUpgrade_R2");
+                EnterStep(12);
             }
 
             return;
@@ -1241,6 +1350,7 @@ public static class RestockPortfolioCapture
             var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
             session.StartBusiness();
             session.SetSpeed(StoreSession.TripleTimeScale);
+            LogHud("campaign");
             Log("campaign day start");
             EnterStep(1);
             return;
@@ -1254,7 +1364,7 @@ public static class RestockPortfolioCapture
             if (ready || ElapsedRealtime() > 340d)
             {
                 Log("campaign ready revenue " + Revenue());
-                if (!StartMovie("10_CampaignComplete"))
+                if (!StartMovie("10_CampaignComplete_R2"))
                 {
                     Fail();
                     return;
@@ -1304,10 +1414,15 @@ public static class RestockPortfolioCapture
         if (step == 4)
         {
             RepaintGame();
+            if (ElapsedFrames() == 30)
+            {
+                LogHud("sandbox");
+            }
+
             if (ElapsedFrames() >= 180)
             {
                 StopMovie();
-                BeginProbe("10_CampaignComplete");
+                BeginProbe("10_CampaignComplete_R2");
                 EnterStep(5);
             }
 
@@ -1648,6 +1763,7 @@ public static class RestockPortfolioCapture
     {
         var progression = UnityEngine.Object.FindAnyObjectByType<StoreProgression>();
         bool restored = progression.TryRestoreCompletedStage(stage);
+        AlignDay(stage);
         var economy = UnityEngine.Object.FindAnyObjectByType<StoreEconomy>();
         economy.TryRestoreState(money, 0, 0);
         var inventory = UnityEngine.Object.FindAnyObjectByType<StoreInventory>();
@@ -1709,7 +1825,62 @@ public static class RestockPortfolioCapture
             }
         }
 
-        Log("stock stage " + progression.CompletedStage + " restored " + restored + " products " + products.Count + " assigned " + assigned + " money " + economy.CurrentMoney);
+        var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
+        Log("stock stage " + progression.CompletedStage + " day " + session.Day + " restored " + restored + " products " + products.Count + " assigned " + assigned + " money " + economy.CurrentMoney);
+    }
+
+    static bool AlignDay(int stage)
+    {
+        var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
+        if (session == null)
+        {
+            Log("session missing");
+            return false;
+        }
+
+        int day = stage + 1;
+        bool restored = session.TryRestorePreparationState(day);
+        Log("align day " + session.Day + " for stage " + stage + " restored " + restored);
+        return restored;
+    }
+
+    static void LogHud(string label)
+    {
+        var session = UnityEngine.Object.FindAnyObjectByType<StoreSession>();
+        var progression = UnityEngine.Object.FindAnyObjectByType<StoreProgression>();
+        int goal = 0;
+        bool hasGoal = progression != null && progression.TryGetDailyGoal(out goal);
+        Log(label
+            + " day " + (session != null ? session.Day : -1)
+            + " stage " + (progression != null ? progression.CompletedStage : -1)
+            + " goal " + (hasGoal ? goal.ToString() : "none")
+            + " campaign " + (progression != null && progression.ShowsCampaignComplete));
+    }
+
+    static void FrameStarterStore()
+    {
+        var controller = UnityEngine.Object.FindAnyObjectByType<IsometricCameraController>();
+        if (controller == null)
+        {
+            Log("camera missing");
+            return;
+        }
+
+        Camera camera = controller.GetComponent<Camera>();
+        if (camera == null || !camera.orthographic)
+        {
+            Log("camera not orthographic");
+            return;
+        }
+
+        var serialized = new SerializedObject(controller);
+        float min = serialized.FindProperty("minOrthographicSize").floatValue;
+        float max = serialized.FindProperty("maxOrthographicSize").floatValue;
+        float lower = Mathf.Min(min, max);
+        float upper = Mathf.Max(min, max);
+        float zoomed = Mathf.Clamp(camera.orthographicSize - 2.5f, lower, upper);
+        camera.orthographicSize = zoomed;
+        Log("customer zoom " + camera.orthographicSize);
     }
 
     static void RestockActive()
