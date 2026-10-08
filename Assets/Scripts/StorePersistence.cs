@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+using UnityEngine.Scripting;
+#endif
 using UnityEngine;
 
 // Preparation의 매장 상태만 JSON 파일 하나에 저장하고 복원한다.
@@ -76,8 +80,43 @@ public class StorePersistence : MonoBehaviour
         }
 
         Debug.Log($"Restock save written: {path}", this);
+        RequestWebGlPersistentSync();
         return true;
     }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    static extern void RestockSyncPersistentData(string gameObjectName);
+
+    void RequestWebGlPersistentSync()
+    {
+        try
+        {
+            RestockSyncPersistentData(gameObject.name);
+            Debug.Log("Restock WebGL sync requested.", this);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Restock WebGL sync failed: {exception.Message}", this);
+        }
+    }
+
+    [Preserve]
+    public void OnWebGlPersistentSyncSucceeded()
+    {
+        Debug.Log("Restock WebGL sync succeeded.", this);
+    }
+
+    [Preserve]
+    public void OnWebGlPersistentSyncFailed(string message)
+    {
+        Debug.LogWarning($"Restock WebGL sync failed: {message}", this);
+    }
+#else
+    void RequestWebGlPersistentSync()
+    {
+    }
+#endif
 
     public bool TryLoad()
     {

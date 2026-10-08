@@ -7,13 +7,22 @@ Unity 6로 제작한 **3D 편의점 경영 시뮬레이션**입니다.
 
 5단계 캠페인을 완료한 뒤에는 모든 콘텐츠가 열린 상태에서 샌드박스 형태로 계속 운영할 수 있습니다.
 
-![RESTOCK Expanded Store](docs/hero-store.png)
+## Play & Video
 
----
+### 🎮 Play WebGL
 
-## 🎬 Gameplay Video
+브라우저에서 바로 플레이할 수 있습니다.
+
+**[▶ Play RESTOCK on itch.io](https://jglee.itch.io/restock)**
+
+> Chrome 또는 Edge 데스크톱 환경을 권장합니다.
+> WebGL 환경에서도 Save / Load를 지원하며, 브라우저 재접속 후 저장 데이터를 불러올 수 있습니다.
+
+### 🎬 Gameplay Video
 
 [![RESTOCK Gameplay Video](https://img.youtube.com/vi/zXNlVgnIxnA/maxresdefault.jpg)](https://youtu.be/zXNlVgnIxnA)
+
+![RESTOCK Expanded Store](docs/hero-store.png)
 
 ---
 
@@ -27,7 +36,7 @@ Unity 6로 제작한 **3D 편의점 경영 시뮬레이션**입니다.
 | Input | Unity Input System 1.19.0 |
 | Navigation | AI Navigation 2.0.12 |
 | UI | uGUI 2.0.0 |
-| Target Platform | Windows PC |
+| Target Platform | Windows PC / WebGL |
 | Genre | Convenience Store Management Simulation |
 | Development Type | 개인 포트폴리오 |
 
@@ -39,7 +48,7 @@ Unity 6로 제작한 **3D 편의점 경영 시뮬레이션**입니다.
 재배포 라이선스 제한으로 GitHub 저장소에는 포함하지 않았습니다.
 
 따라서 저장소만 clone한 경우 일부 비주얼 리소스가 표시되지 않을 수 있습니다.
-완성된 게임 화면과 실제 플레이는 상단의 Gameplay Video와 스크린샷에서 확인할 수 있습니다.
+완성된 게임 화면과 실제 플레이는 상단의 WebGL Build, Gameplay Video 및 스크린샷에서 확인할 수 있습니다.
 
 ---
 
@@ -371,6 +380,21 @@ Progression 정보가 존재하지 않는 이전 Save는 기존 플레이어의 
 
 잘못된 Version이나 유효하지 않은 데이터는 적용하지 않습니다.
 
+### WebGL Save
+
+Windows와 Editor는 `persistentDataPath`의 `restock_save.json`을 파일로 저장합니다.
+
+WebGL 플레이어 빌드도 같은 경로와 Save v5 JSON을 사용합니다. 브라우저에서는 Unity 가상 파일 시스템에 기록되므로, 파일 저장이 성공한 뒤에만 `FS.syncfs(false)`를 호출해 IndexedDB에 반영합니다.
+
+따라서 itch.io WebGL 버전에서도 다음 흐름을 지원합니다.
+
+```text
+Save
+→ Browser Close / Refresh
+→ Re-enter
+→ Load
+```
+
 ---
 
 # 📈 Progression
@@ -564,6 +588,8 @@ Runtime NavMesh 갱신
 
 기존 Save를 유지하면서
 게임 진행 구조 확장
+
+Windows와 WebGL 저장 환경 차이 대응
 ```
 
 작은 편의점에서 시작해 상품을 판매하고, 목표를 달성하고, 매장이 실제로 확장되는 흐름을 하나의 게임 루프로 연결하는 것을 목표로 했습니다.
